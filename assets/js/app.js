@@ -48,6 +48,7 @@ const state = {
   destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
   caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
   caminhosPorDestino: new Map(),   // resultado da busca de caminhos, por destino
+  varrerPaises: null,     // busca tarifas de países específicos (definida em loadRealFares)
   intro: true,            // primeira abertura: anima do mundo até a origem
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
@@ -311,6 +312,35 @@ function paintSelection() {
   }
 }
 
+/**
+ * Busca tarifas dos países que estão à vista e ainda não foram consultados.
+ *
+ * É o "só quando for necessário": em vez de varrer a Europa inteira na
+ * abertura, o site pergunta pelos países que a pessoa está realmente olhando.
+ * Cada país é consultado uma única vez por sessão (e fica 12 h em cache).
+ */
+const paisesJaVistos = new Set();
+let varreduraTimer;
+
+function varrerRegiaoVisivel() {
+  if (!state.varrerPaises || RYA.estaBloqueado()) return;
+  const area = areaVisivel();
+  if (!area) return;
+
+  const novos = [];
+  for (const d of DESTINATIONS) {
+    const cc = (d.cc || '').toLowerCase();
+    if (!cc || paisesJaVistos.has(cc)) continue;
+    if (d.lat < area.south || d.lat > area.north) continue;
+    if (area.west <= area.east ? (d.lon < area.west || d.lon > area.east)
+                               : (d.lon < area.west && d.lon > area.east)) continue;
+    paisesJaVistos.add(cc);
+    novos.push(cc);
+    if (novos.length >= 4) break;      // no máximo 4 países por movimento
+  }
+  if (novos.length) state.varrerPaises(novos);
+}
+
 /** Retângulo visível do mapa, no formato simples que o motor espera. */
 function areaVisivel() {
   if (!map) return null;
@@ -329,7 +359,12 @@ function observarMapa() {
     if (state.intro) return;
     if (state.ignorarMove) { state.ignorarMove = false; return; }
     clearTimeout(areaTimer);
-    areaTimer = setTimeout(() => search({ refit:false }), 280);
+    areaTimer = setTimeout(() => {
+      search({ refit:false });
+      // pede as tarifas da nova região depois de a pessoa parar de mexer
+      clearTimeout(varreduraTimer);
+      varreduraTimer = setTimeout(varrerRegiaoVisivel, 700);
+    }, 280);
   });
 }
 
@@ -395,9 +430,6 @@ function search({ refit = true } = {}) {
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
 let faresAbort;
 
-/* Os códigos ISO que a nossa base usa já são os que a API espera. */
-const PAIS_ISO = Object.fromEntries(DESTINATIONS.map(d => [d.cc, true]));
-
 /**
  * Busca preços reais de voo e, se vierem, refaz a conta com eles.
  * Roda em segundo plano: o site já mostrou as estimativas e só melhora
@@ -427,14 +459,6 @@ async function loadRealFares() {
     state.originAirport = saidas[0] || null;
     if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
 
-    // países da malha Ryanair onde temos destinos: é o que vale consultar
-    const naMalha = new Set(airports.map(a => a.country));
-    const paises = [...new Set(
-      DESTINATIONS
-        .filter(d => naMalha.has(d.country) || PAIS_ISO[d.cc])
-        .map(d => d.cc.toLowerCase()),
-    )];
-
     // Tarifas de todas as saídas, juntadas: para cada destino fica a mais
     // barata, junto com o aeroporto de onde ela parte.
     const acumulado = new Map();
@@ -463,18 +487,21 @@ async function loadRealFares() {
       aplicar();
     }
 
-    // Depois a varredura país a país, só nas duas saídas mais próximas — ela
-    // custa uma requisição por país, e fazer isso em cinco aeroportos seria
-    // pesado demais para uma API pública.
-    for (const saida of saidas.slice(0, 2)) {
-      const todas = await RYA.fetchAllFares(
-        saida.iata, state.month, state.days, paises, signal,
-        parciais => { juntar(parciais, saida); aplicar(); },
-      );
-      if (signal.aborted) return;
-      juntar(todas, saida);
-      aplicar();
-    }
+    // A varredura país a país custa uma requisição por país. Fazê-la inteira na
+    // abertura eram 66 consultas de uma vez, a maior parte de países que a
+    // pessoa nem ia olhar. Agora ela acontece por região: conforme o mapa se
+    // move, buscamos só os países que entraram na tela e ainda não foram
+    // consultados. Guardamos as funções aqui para o observador do mapa usar.
+    state.varrerPaises = async lista => {
+      for (const saida of saidas.slice(0, 2)) {
+        for (const cc of lista) {
+          if (signal.aborted || RYA.estaBloqueado()) return;
+          const novas = await RYA.fetchFares(saida.iata, state.month, state.days, signal, cc);
+          if (novas.size) { juntar(novas, saida); aplicar(); }
+        }
+      }
+    };
+    varrerRegiaoVisivel();
 
     if (!acumulado.size) { state.realFares = new Map(); return setFareStatus('none'); }
 

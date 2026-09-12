@@ -139,6 +139,37 @@ nossa base de cidades, de ~12 para **26 com preço confirmado**.
 A tela não espera por isso: a consulta geral chega primeiro e já preenche o
 mapa; os países vão entrando depois, em ondas.
 
+### Orçamento de requisições
+
+A API da Ryanair é pública e gratuita, mas tem limite: durante o desenvolvimento
+uma busca de caminhos passava de cem requisições e a companhia passou a
+responder **403 em tudo**. A recusa vem sem cabeçalhos de CORS, então o
+navegador reporta "erro de origem" — parece outro problema, e é fácil perder
+tempo investigando a coisa errada.
+
+O site foi reorganizado em torno de um orçamento:
+
+| Momento | Requisições |
+|---|---|
+| Abertura (por origem/mês/dias) | **21** — consulta geral das 5 saídas + rede de escalas |
+| Navegando o mapa | até 4 países por movimento, cada um só uma vez |
+| Abrir um destino | **0** — a busca de caminhos só roda se a pessoa clicar |
+| Quando ela roda | ~12, guardada por destino |
+
+O que segura isso:
+
+- **Fila**: no máximo 2 requisições ao mesmo tempo, 250 ms entre disparos.
+- **Pausa automática**: ao receber 403 ou 429, o site para por 5 minutos,
+  descarta a fila e avisa na tela. Insistir é o que transforma um limite
+  temporário em bloqueio longo.
+- **Varredura por região**: em vez de varrer a Europa inteira na abertura (66
+  requisições), o site pede só os países que entraram na tela.
+- **Sob demanda**: caminhos alternativos só quando a pessoa aperta o botão.
+- **Cache**: tarifas 12 h, rotas e aeroportos 30 dias, tudo em `localStorage`.
+
+Com a API fora do ar o site continua funcionando: mostra as estimativas e avisa
+que os preços reais estão indisponíveis.
+
 ### Trajeto com escala pela própria malha
 
 A Ryanair não vende bilhete com conexão, mas a malha permite o caminho: dá para
