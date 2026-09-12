@@ -57,6 +57,16 @@ para consulta; o código não está licenciado para uso de terceiros.
 
 # Documentação técnica
 
+## Para onde a pessoa quer ir
+
+Abaixo do campo de origem há um campo opcional de destino. Ele busca nas 212
+cidades da base e, se não achar, no mapa do mundo — e aí **fica com o destino
+conhecido mais próximo**, dizendo quantos quilômetros faltam. É o "chegar o mais
+perto possível com a informação que temos".
+
+Nomes ambíguos são desambiguados na lista: digitar "Santiago" oferece Santiago
+do Chile, Santiago de Compostela e Santiago de Cuba, marcando quais têm voos.
+
 ## De onde a pessoa está saindo
 
 O site descobre sozinho, em duas camadas:
@@ -367,12 +377,28 @@ Quando o destino não tem voo direto da origem, o site tenta nesta ordem — e
 para na primeira que resolver:
 
 1. **Voo direto de um aeroporto vizinho da origem** (até 400 km)
-2. **Destino vizinho com voo direto** (até 350 km do destino)
-3. **Trajeto com escala** pela malha da companhia
+2. **Voo até uma cidade vizinha + o último trecho por terra** (até 350 km)
+3. **Trajeto com escala** pela malha da companhia, no máximo 28 h de espera
 4. **Busca no Google**, em destaque dourado
 
 A ordem não é arbitrária: um voo só vale mais que duas escalas, mesmo que exija
-dirigir umas horas até o aeroporto.
+algumas horas de estrada.
+
+O passo 2 é o caminho que as pessoas realmente fazem. Para **Santiago de
+Compostela saindo de Olbia**, o site oferecia uma escala de € 219 só de ida; a
+resposta boa é voar Cagliari → Porto por € 104 e pegar 2h45 de ônibus até
+Santiago — **€ 136 no total, ida e volta**. Ele procura de propósito: para cada
+cidade num raio de 350 km do destino, verifica se há tarifa confirmada e, se não
+houver, se existe voo direto até lá saindo de algum aeroporto perto de casa.
+
+O trecho terrestre é estimado em € 0,085/km e 70 km/h de média, e leva a uma
+busca no Google — o valor é de planejamento, não cotação.
+
+### Escala: no máximo 28 horas
+
+Acima disso deixa de ser escala e vira outra viagem. As janelas tentadas são
+6 h, 12 h e 28 h, nessa ordem; se nada couber, o trajeto é descartado e o site
+procura outro caminho em vez de oferecer dois dias num aeroporto.
 
 ### Três aeroportos de partida não bastam
 

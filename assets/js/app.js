@@ -3,7 +3,7 @@
    ======================================================================== */
 
 import { DESTINATIONS, TAG_LABELS } from './data/destinations.js';
-import { searchLocal, searchRemote } from './data/origins.js';
+import { searchLocal, searchRemote, norm } from './data/origins.js';
 import * as GEO from './data/geo.js';
 import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js';
 import * as FX from './fx.js';
@@ -44,6 +44,7 @@ const state = {
   filtro: 'todos',        // todos | confirmado (direto+escala) | direto
   viaEscala: new Map(),   // destino -> escala, pela malha da Ryanair
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
+  destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
   intro: true,            // primeira abertura: anima do mundo até a origem
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
@@ -614,15 +615,24 @@ function renderDetails(r) {
 
   // Sem voo direto para este destino, oferecemos o aeroporto vizinho que tem.
   const alt = (!r.real && !r.useGround && mode.flight) ? vooDiretoPerto(r) : null;
+
+  // Voar até a cidade vizinha e fazer o último trecho por terra costuma ser o
+  // caminho real: Porto fica a 3 h de ônibus de Santiago de Compostela, e isso
+  // resolve melhor que uma escala de avião do outro lado da Europa.
+  const terra = alt ? P.groundLeg(alt.km) : null;
   const altRow = alt ? `
     <button type="button" class="alt-direto" data-alt="${esc(alt.dest.id)}">
-      <span class="alt-tag">★ voo direto aqui perto</span>
-      <span class="alt-nome"><b>${esc(alt.dest.city)}</b> — a ${alt.km} km de ${esc(r.dest.city)}</span>
+      <span class="alt-tag">★ voo direto até perto + ${esc(terra.modo)}</span>
+      <span class="alt-nome">
+        Voe até <b>${esc(alt.dest.city)}</b> e siga ${alt.km} km
+        até ${esc(r.dest.city)} — ${esc(terra.tempo)} de ${esc(terra.modo)}
+      </span>
       <span class="alt-meta">${esc(alt.fare.ida?.flight || '')} · ${
         alt.fare.ida?.minutos ? fmtDuracao(alt.fare.ida.minutos) + ' de voo' : 'voo direto'} ·
-        parte de ${esc(alt.fare.saida?.iata || alt.fare.originIata || '')}</span>
-      <span class="alt-preco">${fmt(alt.fare.price)}<small>ida e volta</small></span>
-      <span class="alt-ir">ver este destino →</span>
+        parte de ${esc(alt.fare.saida?.iata || alt.fare.originIata || '')} ·
+        ${esc(terra.modo)} ida e volta ≈ ${fmt(terra.preco)}</span>
+      <span class="alt-preco">${fmt(alt.fare.price + terra.preco)}<small>voo + ${esc(terra.modo)}</small></span>
+      <span class="alt-ir">ver ${esc(alt.dest.city)} →</span>
     </button>` : '';
   const stays   = P.stayOptions(r, ctx);
   const links   = bookingLinks(state.origin, r, state.month)
@@ -728,6 +738,57 @@ function realcarBusca(ligado) {
   col?.classList.toggle('dcol-ouro', ligado);
 }
 
+/**
+ * Voo até uma cidade vizinha do destino + o último trecho por terra.
+ *
+ * É o caminho que as pessoas realmente fazem: para Santiago de Compostela sem
+ * voo direto, voa-se até o Porto e pegam-se 3 h de ônibus. O site só encontrava
+ * isso quando a cidade vizinha por acaso já tinha tarifa em cache — agora ele
+ * procura de propósito, inclusive partindo de outro aeroporto perto de casa.
+ *
+ * @returns {Promise<null|{dest, km, fare, terra, total, saida}>}
+ */
+async function vooMaisTerra(r, signal, maxKm = 350) {
+  const vizinhos = DESTINATIONS
+    .filter(d => d.id !== r.dest.id)
+    .map(d => ({ d, km: Math.round(distanciaSimples(d, r.dest)) }))
+    .filter(v => v.km <= maxKm)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, 4);
+
+  const achados = [];
+  for (const v of vizinhos) {
+    const terra = P.groundLeg(v.km);
+
+    // 1) já temos tarifa confirmada para essa cidade?
+    const jaTem = state.realFares.get(v.d.id);
+    if (jaTem) {
+      achados.push({ ...v, fare:jaTem, terra, saida:jaTem.saida, total:jaTem.price + terra.preco });
+      continue;
+    }
+
+    // 2) senão, existe voo direto até ela saindo de algum aeroporto perto?
+    const apt = RYA.nearestAirport(state.airports, v.d, 130);
+    if (!apt) continue;
+    const direto = await RYA.directFromNearbyAirport(
+      state.origin, apt, state.airports, state.month, state.days, signal, [],
+    );
+    if (signal?.aborted) return null;
+    if (direto) {
+      achados.push({
+        ...v, terra, saida: direto.saida,
+        fare: { price: direto.price, ida: direto.ida, volta: direto.volta },
+        total: direto.price + terra.preco,
+      });
+    }
+    if (achados.length >= 2) break;          // dois candidatos já bastam
+  }
+
+  if (!achados.length) return null;
+  achados.sort((a, b) => a.total - b.total);
+  return achados[0];
+}
+
 /* ------------------------------------------- trajeto com escala --------- */
 let conexaoAbort;
 
@@ -775,6 +836,14 @@ async function buscarConexao(r) {
     return;
   }
 
+  // Segundo: voar até uma cidade vizinha e fazer o resto por terra.
+  const comTerra = await vooMaisTerra(r, signal);
+  if (signal.aborted || state.selected !== alvo) return;
+  if (comTerra) {
+    mostrarVooMaisTerra(comTerra, r);
+    return;
+  }
+
   // Compara as duas saídas mais próximas em vez de ficar com a primeira que
   // funcionar: parar na primeira levava a trajetos de € 179 saindo de um
   // aeroporto a 195 km, quando o aeroporto local resolvia por menos.
@@ -802,15 +871,13 @@ async function buscarConexao(r) {
      na explicação — antes a seta dizia "2 dias" e o texto "uma noite". */
   const faixa = min => !Number.isFinite(min) ? 'desconhecida'
     : min <= 720  ? 'curta'      // até 12 h: troca de avião no mesmo dia
-    : min <= 1800 ? 'noite'      // até 30 h: uma noite fora
-    : 'dias';
+    : 'noite';                   // o motor não devolve escala acima de 28 h
 
   const emTexto = min => {
     switch (faixa(min)) {
       case 'desconhecida': return 'troca de voo';
       case 'curta':  return min < 60 ? `${min} min de espera` : `${fmtDuracao(min)} de espera`;
-      case 'noite':  return 'uma noite na cidade';
-      default:       return `${Math.round(min / 1440)} dias na cidade`;
+      default:       return 'uma noite na cidade';
     }
   };
 
@@ -822,8 +889,7 @@ async function buscarConexao(r) {
     switch (faixa(min)) {
       case 'desconhecida': return '';
       case 'curta':  return `troca de avião em ${onde}, no mesmo dia`;
-      case 'noite':  return `uma noite em ${onde} entre os voos`;
-      default:       return `<b>${Math.round(min / 1440)} dias em ${onde}</b> entre um voo e outro`;
+      default:       return `uma noite em ${onde} entre os voos`;
     }
   };
 
@@ -857,8 +923,8 @@ async function buscarConexao(r) {
   const naVolta = c.pernasVolta ? explicar(c.esperaVoltaMin) : '';
   if (naIda)   avisos.push(`Na ida, ${naIda}.`);
   if (naVolta) avisos.push(`Na volta, ${naVolta}.`);
-  if ([c.esperaMin, c.esperaVoltaMin].filter(m => faixa(m) === 'dias').length) {
-    avisos.push('Uma parada dessas é quase uma segunda viagem: conte com hospedagem nessa cidade.');
+  if ([c.esperaMin, c.esperaVoltaMin].filter(m => faixa(m) === 'noite').length) {
+    avisos.push('A espera passa de 12 h: conte com uma noite de hospedagem na cidade da escala.');
   }
   if (c.voltaAmpliada && dias) {
     avisos.push(`Não há volta por esta rota nos ${r.days} dias pedidos: a opção encontrada
@@ -930,6 +996,53 @@ function mostrarDiretoDeLonge(d, destApt, r) {
   state.conexao = null;
   realcarBusca(false);
   desenharRotaDireta(d, r.dest);
+}
+
+/** Mostra o caminho "voe até X, siga por terra até Y". */
+function mostrarVooMaisTerra(c, r) {
+  const caixa = $('#conexaoBox');
+  if (!caixa) return;
+
+  const linha = (p, rotulo) => p ? `
+    <a class="perna is-link" href="${RYA.legBookingUrl(p, r.people)}"
+       target="_blank" rel="noopener nofollow">
+      <span class="perna-rota"><b>${esc(p.from)}</b> → <b>${esc(p.to)}</b>
+        <i class="perna-voo">${esc(p.flight || '')}</i></span>
+      <span class="perna-data">${rotulo} · ${fmtDataHora(p.depart)} → ${fmtHora(p.arrive)}
+        ${p.minutos > 0 ? `· ${fmtDuracao(p.minutos)}` : ''}</span>
+      <span class="perna-preco">${fmt(p.price)}</span>
+    </a>` : '';
+
+  const buscaTerra = 'https://www.google.com/search?' + new URLSearchParams({
+    q: `ônibus ou trem de ${c.d.city} para ${r.dest.city}`, hl:'pt-BR',
+  });
+
+  caixa.classList.add('conexao-direta');
+  caixa.innerHTML = `
+    <div class="conexao-head">
+      <span class="conexao-tag tag-direto">★ voo até perto + ${esc(c.terra.modo)}</span>
+      <b>${fmt(c.total)}</b><small>voo ida e volta + ${esc(c.terra.modo)}</small>
+    </div>
+    <div class="conexao-bloco">
+      ${linha(c.fare.ida, 'ida')}
+      ${linha(c.fare.volta, 'volta')}
+      <a class="perna is-link perna-terra" href="${buscaTerra}" target="_blank" rel="noopener nofollow">
+        <span class="perna-rota"><b>${esc(c.d.city)}</b> → <b>${esc(r.dest.city)}</b>
+          <i class="perna-voo">${esc(c.terra.modo)}</i></span>
+        <span class="perna-data">${c.km} km · cerca de ${esc(c.terra.tempo)} por trecho</span>
+        <span class="perna-preco">${fmt(c.terra.preco)}<small>buscar →</small></span>
+      </a>
+    </div>
+    <p class="conexao-nota">
+      Não há voo até ${esc(r.dest.city)}, mas <b>${esc(c.d.city)}</b> fica a
+      ${c.km} km — cerca de ${esc(c.terra.tempo)} de ${esc(c.terra.modo)}. Costuma
+      sair melhor que uma escala de avião: um voo só e o resto por terra.
+      O valor do ${esc(c.terra.modo)} é estimativa; confira no buscador.
+    </p>`;
+
+  state.conexao = null;
+  realcarBusca(false);
+  desenharRotaDireta({ saida:c.saida, ...c }, c.d);
 }
 
 /** Arco da origem até o aeroporto vizinho e daí ao destino. */
@@ -1126,6 +1239,113 @@ function setupCombo() {
 
   input.addEventListener('blur', () => setTimeout(() => { $('#originList').hidden = true; }, 120));
   input.addEventListener('focus', () => { if (input.value.trim()) renderCombo(searchLocal(input.value)); });
+}
+
+/* ------------------------------------------- para onde a pessoa quer ir -- */
+
+/** Procura entre os nossos destinos e, se precisar, no mapa do mundo. */
+function buscarDestinos(texto, limite = 6) {
+  const q = norm(texto);
+  if (q.length < 2) return [];
+  const comeca = [], contem = [];
+  for (const d of DESTINATIONS) {
+    const c = norm(d.city);
+    if (c.startsWith(q)) comeca.push(d);
+    else if (c.includes(q) || norm(d.country).startsWith(q)) contem.push(d);
+  }
+  return [...comeca, ...contem].slice(0, limite);
+}
+
+/**
+ * Define o alvo da viagem. Se o lugar pedido não está na nossa lista, ficamos
+ * com o destino conhecido mais próximo — é o "chegar o mais perto possível".
+ */
+function definirDestino(lugar) {
+  let alvo = lugar.id ? lugar : null;
+  let distancia = 0;
+
+  if (!alvo) {                       // veio do mapa do mundo, não da nossa lista
+    let menor = Infinity;
+    for (const d of DESTINATIONS) {
+      const km = distanciaSimples(lugar, d);
+      if (km < menor) { menor = km; alvo = d; }
+    }
+    distancia = Math.round(menor);
+  }
+  if (!alvo) return;
+
+  state.destinoAlvo = { ...alvo, pedido: lugar.city, kmDoPedido: distancia };
+  $('#destino').value = lugar.city;
+  $('#destinoList').hidden = true;
+  $('#btnLimparDestino').hidden = false;
+  $('#destinoHint').innerHTML = distancia > 25
+    ? `Não temos voos para ${esc(lugar.city)}. O ponto mais próximo é
+       <b>${esc(alvo.city)}</b>, a ${distancia} km.`
+    : `Procurando o melhor caminho até <b>${esc(alvo.city)}</b>.`;
+
+  // leva o mapa até lá e abre o destino
+  state.ignorarMove = true;
+  map.setView([alvo.lat, alvo.lon], 6, { animate:false });
+  setTimeout(() => { search({ refit:false }); select(alvo.id, { fly:false }); }, 120);
+}
+
+function limparDestino() {
+  state.destinoAlvo = null;
+  $('#destino').value = '';
+  $('#btnLimparDestino').hidden = true;
+  $('#destinoHint').textContent =
+    'Se não houver voo até lá, buscamos o ponto mais próximo que dá para alcançar.';
+}
+
+function setupDestino() {
+  const input = $('#destino');
+  const lista = $('#destinoList');
+  let itens = [], idx = -1, timer, abort;
+
+  const pintar = () => [...lista.children]
+    .forEach((n, i) => n.classList.toggle('is-active', i === idx));
+
+  const mostrar = achados => {
+    itens = achados; idx = -1;
+    lista.innerHTML = '';
+    if (!achados.length) { lista.hidden = true; return; }
+    achados.forEach((o, i) => {
+      const n = el('div', 'combo-item',
+        `<span>${esc(o.city)}</span><small>${esc(o.country)}${o.remote ? '' : ' ·<b> temos voos</b>'}</small>`);
+      n.addEventListener('mousedown', e => { e.preventDefault(); definirDestino(o); });
+      n.addEventListener('mouseenter', () => { idx = i; pintar(); });
+      lista.appendChild(n);
+    });
+    lista.hidden = false;
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { limparDestino(); lista.hidden = true; return; }
+    mostrar(buscarDestinos(q));
+    if (q.length < 3) return;
+    timer = setTimeout(async () => {
+      abort?.abort(); abort = new AbortController();
+      try {
+        const remotos = await searchRemote(q, abort.signal);
+        const nossos = buscarDestinos(q, 4);
+        const vistos = new Set(nossos.map(o => norm(o.city)));
+        mostrar([...nossos, ...remotos.filter(o => !vistos.has(norm(o.city)))].slice(0, 8));
+      } catch {/* sem rede: a lista local basta */}
+    }, 280);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (lista.hidden || !itens.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = (idx + 1) % itens.length; pintar(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = (idx - 1 + itens.length) % itens.length; pintar(); }
+    else if (e.key === 'Enter') { e.preventDefault(); definirDestino(itens[Math.max(0, idx)]); }
+    else if (e.key === 'Escape') { lista.hidden = true; }
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => { lista.hidden = true; }, 120));
+  $('#btnLimparDestino').addEventListener('click', limparDestino);
 }
 
 /* --------------------------------------------------------- formulário -- */
@@ -1383,6 +1603,7 @@ async function boot() {
   initMap();
   observarMapa();
   setupCombo();
+  setupDestino();
   setupForm();
   $('#styleHint').textContent = STYLES[state.style].hint;
   mountAllAds();

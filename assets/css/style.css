@@ -674,3 +674,13 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .conexao-direta .conexao-head b{color:#ffd24a}
 .conexao-direta a.perna.is-link:hover{background:rgba(255,210,74,.12);border-color:#ffd24a}
 .conexao-direta a.perna.is-link .perna-preco small{color:#ffd24a}
+
+/* campo "para onde quer ir" */
+.opcional{
+  font-style:normal;font-size:9.5px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--txt-faint);border:1px solid var(--line);
+  border-radius:4px;padding:0 5px;margin-left:5px;
+}
+.combo-item small b{color:var(--accent);font-weight:600}
+.perna-terra{border-top:1px dashed var(--line);margin-top:4px;padding-top:8px!important}
+.perna-terra .perna-voo{color:var(--accent)!important}

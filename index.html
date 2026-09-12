@@ -62,6 +62,17 @@
       </div>
 
       <div class="field">
+        <label for="destino">Para onde quer ir? <i class="opcional">opcional</i></label>
+        <div class="combo">
+          <input type="text" id="destino" name="destino" placeholder="Deixe vazio para ver tudo no mapa">
+          <button type="button" id="btnLimparDestino" class="locate-btn" hidden
+                  title="Limpar destino" aria-label="Limpar destino">✕</button>
+          <div class="combo-list" id="destinoList" role="listbox" hidden></div>
+        </div>
+        <p class="hint" id="destinoHint">Se não houver voo até lá, buscamos o ponto mais próximo que dá para alcançar.</p>
+      </div>
+
+      <div class="field">
         <label for="budget">Quanto você tem no total?</label>
         <div class="money">
           <span class="money-symbol" id="curSymbol">€</span>

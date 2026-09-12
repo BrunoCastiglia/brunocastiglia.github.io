@@ -426,15 +426,15 @@ export async function findConnection(origin, dest, airports, month, days, signal
   // escala.
   const FOLGA_MIN_H = 2;
 
-  /* Janelas tentadas em ordem. A ideia é preferir a conexão curta, mas não
-     descartar o trajeto quando ela não existe: numa rota de 2 voos por semana,
-     esperar dois dias na escala pode ser a única forma de chegar — e é uma
-     possibilidade legítima, desde que a tela diga com todas as letras quanto
-     tempo a pessoa passaria ali. */
+  /* Janelas tentadas em ordem, da melhor para a tolerável. O teto é 28 h:
+     passar disso deixa de ser escala e vira outra viagem — quem quer ir a um
+     lugar não quer dormir dois dias num aeroporto pelo caminho. Se nada couber
+     em 28 h, o trajeto é descartado e o site procura outra forma de chegar
+     (aeroporto vizinho, ou voo até perto e o resto por terra). */
   const JANELAS = [
-    { ateH: 12,      tipo:'curta'   },   // mesma tarde, sem dormir fora
-    { ateH: 48,      tipo:'pernoite'},   // uma noite na cidade da escala
-    { ateH: 24 * 7,  tipo:'parada'  },   // parada longa, anunciada como tal
+    { ateH: 6,  tipo:'curta'    },   // troca de avião na mesma tarde
+    { ateH: 12, tipo:'mesmo-dia'},   // ainda no mesmo dia
+    { ateH: 28, tipo:'pernoite' },   // uma noite na cidade da escala
   ];
 
   const somaHoras = (iso, h) =>

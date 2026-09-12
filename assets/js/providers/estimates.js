@@ -84,3 +84,22 @@ export function stayOptions(r, ctx) {
     };
   });
 }
+
+/**
+ * Último trecho por terra, quando o voo deixa a pessoa numa cidade vizinha.
+ *
+ * Valores de planejamento: ônibus e trem regionais na Europa custam por volta
+ * de € 0,085/km e andam a uns 70 km/h de média, contando paradas.
+ */
+export function groundLeg(km) {
+  const minutos = Math.round(km / 70 * 60);
+  const tempo = minutos < 60
+    ? `${minutos} min`
+    : `${Math.floor(minutos / 60)}h${String(minutos % 60).padStart(2, '0')}`;
+  return {
+    km,
+    modo: km <= 120 ? 'trem ou ônibus' : 'ônibus',
+    tempo,
+    preco: Math.max(12, Math.round(km * 0.085)) * 2,   // ida e volta
+  };
+}

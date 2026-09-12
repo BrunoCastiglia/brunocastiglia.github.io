@@ -2,6 +2,7 @@
   "name": "moneytogo",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Diga quanto você tem e veja no mapa para onde dá para ir, com preço real de voo quando existe.",
   "scripts": {
     "dev": "node serve.mjs",
