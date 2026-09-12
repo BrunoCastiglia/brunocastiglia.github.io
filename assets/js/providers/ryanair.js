@@ -211,11 +211,12 @@ export function searchWindow(month, days) {
  * Busca as tarifas reais de ida e volta saindo de um aeroporto.
  * @returns {Promise<Map<string, object>>} IATA de chegada -> tarifa
  */
-export async function fetchFares(originIata, month, days, signal, country = null) {
+export async function fetchFares(originIata, month, days, signal, destinos = null) {
   const w = searchWindow(month, days);
   if (!w.valid) return new Map();
 
-  const key = `${CACHE_FARES}${originIata}.${month}.${days}.${country || 'all'}`;
+  const alvos = destinos?.length ? [...destinos].sort().join(',') : '';
+  const key = `${CACHE_FARES}${originIata}.${month}.${days}.${alvos || 'all'}`;
   const cached = readCache(key, TTL_FARES);
   if (cached) return new Map(cached);
 
@@ -230,7 +231,7 @@ export async function fetchFares(originIata, month, days, signal, country = null
     currency: 'EUR',
     limit: 20,          // máximo aceito pela API
     offset: 0,
-    ...(country ? { arrivalCountryCode: country } : {}),
+    ...(alvos ? { arrivalAirportIataCodes: alvos } : {}),
   });
 
   let rows;
@@ -265,42 +266,6 @@ export async function fetchFares(originIata, month, days, signal, country = null
 
   writeCache(key, [...best]);
   return best;
-}
-
-/**
- * Busca ampla: a consulta sem filtro devolve só os 20 destinos mais baratos,
- * então varremos também país a país. Em Milão-Bergamo isso levou a cobertura
- * de 19 para 67 destinos com preço real.
- *
- * Roda em duas ondas para a tela não ficar esperando: primeiro a consulta
- * geral (rápida), depois os países, em grupos de 4 para não atropelar a API.
- *
- * @param {function} aoProgredir chamado a cada onda com o Map acumulado
- */
-export async function fetchAllFares(originIata, month, days, countries, signal, aoProgredir) {
-  const total = new Map();
-
-  const juntar = novas => {
-    for (const [iata, f] of novas) {
-      if (!total.has(iata) || total.get(iata).price > f.price) total.set(iata, f);
-    }
-  };
-
-  juntar(await fetchFares(originIata, month, days, signal));
-  if (signal?.aborted) return total;
-  aoProgredir?.(total);
-
-  const fila = [...countries];
-  const LOTE = 4;
-  while (fila.length && !signal?.aborted) {
-    const grupo = fila.splice(0, LOTE);
-    const res = await Promise.all(
-      grupo.map(cc => fetchFares(originIata, month, days, signal, cc).catch(() => new Map())),
-    );
-    res.forEach(juntar);
-  }
-
-  return total;
 }
 
 /* ------------------------------------------ casamento com a nossa base --- */
@@ -370,6 +335,38 @@ const CACHE_ROUTES = 'ppi.ryanair.routes.v1.';
 const TTL_ROUTES = 30 * 24 * 3600e3;      // rotas mudam por temporada, não por dia
 
 /** Destinos que a Ryanair serve a partir de um aeroporto. Cache de 7 dias. */
+/** Quantos destinos cabem numa consulta. A resposta traz no máximo 20 ofertas
+ *  (limit=50 devolve HTTP 400), então pedimos menos que isso para nenhum ficar
+ *  de fora por causa do corte. */
+export const LOTE_DESTINOS = 15;
+
+/**
+ * Preço de TODOS os destinos de uma lista, em lotes.
+ *
+ * A consulta geral de um aeroporto devolve só as 20 ofertas mais baratas, e
+ * Cagliari sozinha serve 42 rotas: metade dos destinos diretos ficava sem
+ * preço. Mas `arrivalAirportIataCodes` (no plural, separado por vírgula) aceita
+ * uma lista e devolve o preço de cada um deles — então basta partir a lista em
+ * lotes menores que o teto de 20 e juntar as respostas. As 42 rotas de Cagliari
+ * saem em 3 requisições e menos de 2 segundos.
+ *
+ * `aoLote` é chamada depois de cada lote com o que chegou até ali, para o mapa
+ * ir acendendo as estrelas em vez de esperar o fim.
+ */
+export async function sweepFares(originIata, destIatas, month, days, signal, aoLote) {
+  const todos = new Map();
+  const lista = [...new Set(destIatas)];
+
+  for (let i = 0; i < lista.length; i += LOTE_DESTINOS) {
+    if (signal?.aborted || estaBloqueado()) break;
+    const lote = lista.slice(i, i + LOTE_DESTINOS);
+    const novas = await fetchFares(originIata, month, days, signal, lote);
+    for (const [k, v] of novas) todos.set(k, v);
+    aoLote?.(novas, { feitos: Math.min(i + LOTE_DESTINOS, lista.length), total: lista.length });
+  }
+  return todos;
+}
+
 export async function routesFrom(iata, signal) {
   const key = CACHE_ROUTES + iata;
   const cached = readCache(key, TTL_ROUTES);

@@ -49,7 +49,6 @@ const state = {
   destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
   caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
   caminhosPorDestino: new Map(),   // resultado da busca de caminhos, por destino
-  varrerPaises: null,     // busca tarifas de países específicos (definida em loadRealFares)
   intro: true,            // primeira abertura: anima do mundo até a origem
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
@@ -61,6 +60,7 @@ const fmt = (eur, o) => FX.money(eur, state.currency, o);
 
 /* ------------------------------------------------------------- mapa ----- */
 let map, layerDest, originMarker, routeLine;
+let radarMarker;                     // anéis de varredura sobre a origem
 const markers = new Map();
 
 function initMap() {
@@ -269,7 +269,22 @@ function pinIcon(html, cls) {
 
 function drawOrigin() {
   if (originMarker) originMarker.remove();
+  if (radarMarker) { radarMarker.remove(); radarMarker = null; }
   if (!state.origin) return;
+
+  // Radar: anéis que se abrem a partir da origem enquanto os preços chegam.
+  // Vai de marcador, e não de camada fixa, para acompanhar sozinho o arrasto e
+  // o zoom do mapa. Fica invisível até a busca começar — quem acende é a classe
+  // .buscando no .map-wrap, posta pelo setFareStatus.
+  radarMarker = L.marker([state.origin.lat, state.origin.lon], {
+    icon: L.divIcon({
+      className: 'radar-icon',
+      html: '<div class="radar"><i></i><i></i><i></i></div>',
+      iconSize: [0, 0], iconAnchor: [0, 0],
+    }),
+    interactive: false, keyboard: false, zIndexOffset: -500,
+  }).addTo(map);
+
   originMarker = L.marker([state.origin.lat, state.origin.lon], {
     icon: pinIcon('◉ ' + esc(state.origin.city), 'pin pin-origin'), zIndexOffset: 1200,
   }).addTo(map);
@@ -330,35 +345,6 @@ function paintSelection() {
   }
 }
 
-/**
- * Busca tarifas dos países que estão à vista e ainda não foram consultados.
- *
- * É o "só quando for necessário": em vez de varrer a Europa inteira na
- * abertura, o site pergunta pelos países que a pessoa está realmente olhando.
- * Cada país é consultado uma única vez por sessão (e fica 12 h em cache).
- */
-const paisesJaVistos = new Set();
-let varreduraTimer;
-
-function varrerRegiaoVisivel() {
-  if (!state.varrerPaises || RYA.estaBloqueado()) return;
-  const area = areaVisivel();
-  if (!area) return;
-
-  const novos = [];
-  for (const d of DESTINATIONS) {
-    const cc = (d.cc || '').toLowerCase();
-    if (!cc || paisesJaVistos.has(cc)) continue;
-    if (d.lat < area.south || d.lat > area.north) continue;
-    if (area.west <= area.east ? (d.lon < area.west || d.lon > area.east)
-                               : (d.lon < area.west && d.lon > area.east)) continue;
-    paisesJaVistos.add(cc);
-    novos.push(cc);
-    if (novos.length >= 4) break;      // no máximo 4 países por movimento
-  }
-  if (novos.length) state.varrerPaises(novos);
-}
-
 /** Retângulo visível do mapa, no formato simples que o motor espera. */
 function areaVisivel() {
   if (!map) return null;
@@ -380,12 +366,7 @@ function observarMapa() {
     if (Date.now() < (state.ignorarMoveAte || 0)) return;
     if (state.ignorarMove) { state.ignorarMove = false; return; }
     clearTimeout(areaTimer);
-    areaTimer = setTimeout(() => {
-      search({ refit:false });
-      // pede as tarifas da nova região depois de a pessoa parar de mexer
-      clearTimeout(varreduraTimer);
-      varreduraTimer = setTimeout(varrerRegiaoVisivel, 700);
-    }, 280);
+    areaTimer = setTimeout(() => search({ refit:false }), 280);
   });
 }
 
@@ -491,7 +472,9 @@ async function loadRealFares() {
     // ficam 30 dias em cache: são 5 consultas, uma por saída.
     const porIata = new Map(airports.map(a => [a.iata, a]));
     const diretos = new Set();
+    const rotasUteis = new Map();          // saída IATA -> aeroportos que servem algum destino
     for (const saida of saidas) {
+      rotasUteis.set(saida.iata, []);
       const rotas = await RYA.routesFrom(saida.iata, signal);
       if (signal.aborted) return;
       for (const rota of rotas) {
@@ -502,7 +485,10 @@ async function loadRealFares() {
           const km = distanciaSimples(apt, d);
           if (km < menor) { menor = km; melhor = d; }
         }
-        if (melhor && menor <= 130) diretos.add(melhor.id);
+        if (melhor && menor <= 130) {
+          diretos.add(melhor.id);
+          rotasUteis.get(saida.iata).push(rota.iata);
+        }
       }
     }
     state.temVooDireto = diretos;
@@ -527,63 +513,44 @@ async function loadRealFares() {
       search({ refit:false });                  // refaz a conta com preço real
     };
 
-    // Primeiro a consulta geral de TODAS as saídas (uma requisição cada): é
-    // rápido e já põe os destinos mais baratos de cada aeroporto no mapa.
-    for (const saida of saidas) {
-      const rapidas = await RYA.fetchFares(saida.iata, state.month, state.days, signal);
-      if (signal.aborted) return;
-      juntar(rapidas, saida);
-      aplicar();
-    }
+    // Primeira pintura: a consulta geral da saída mais próxima, uma requisição
+    // só. Traz os 20 destinos mais baratos dela, então o mapa já tem preço real
+    // antes de a varredura começar. Serve também de rede de segurança caso a
+    // malha de rotas venha vazia.
+    const rapidas = await RYA.fetchFares(saidas[0].iata, state.month, state.days, signal);
+    if (signal.aborted) return;
+    juntar(rapidas, saidas[0]);
+    aplicar();
 
-    // A varredura país a país custa uma requisição por país. Fazê-la inteira na
-    // abertura eram 66 consultas de uma vez, a maior parte de países que a
-    // pessoa nem ia olhar. Agora ela acontece por região: conforme o mapa se
-    // move, buscamos só os países que entraram na tela e ainda não foram
-    // consultados. Guardamos as funções aqui para o observador do mapa usar.
-    state.varrerPaises = async lista => {
-      for (const saida of saidas.slice(0, 2)) {
-        for (const cc of lista) {
-          if (signal.aborted || RYA.estaBloqueado()) return;
-          const novas = await RYA.fetchFares(saida.iata, state.month, state.days, signal, cc);
-          if (novas.size) { juntar(novas, saida); aplicar(); }
-        }
-      }
-    };
-    varrerRegiaoVisivel();
-
-    if (!acumulado.size) { state.realFares = new Map(); return setFareStatus('none'); }
-
-    // Completa o preço dos destinos que têm voo direto e ficaram sem.
+    // Preço de TODOS os destinos com voo direto, em lotes.
     //
-    // A consulta geral devolve no máximo 20 ofertas por aeroporto, mas
-    // Cagliari sozinha serve 42 rotas: metade dos destinos diretos ficava só
-    // com estimativa. Consultar por país traz até 20 de cada país e cobre o
-    // resto. Oito países bastam: a consulta por país também devolve no máximo
-    // 20 ofertas, então ampliar para catorze não mudou a cobertura (78% dos
-    // dois jeitos) e só gastava mais. Os destinos que sobram ficam marcados com
-    // ☆ no mapa e têm o preço buscado quando a pessoa os abre — duas consultas
-    // pelo par exato, que é o único jeito de alcançá-los.
-    const porPais = new Map();
-    for (const id of diretos) {
-      if (state.realFares.has(id)) continue;
-      const cc = DESTINATIONS.find(d => d.id === id)?.cc?.toLowerCase();
-      if (cc) porPais.set(cc, (porPais.get(cc) || 0) + 1);
-    }
-    const prioritarios = [...porPais.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([cc]) => cc);
+    // A consulta geral devolve só as 20 ofertas mais baratas de cada aeroporto,
+    // mas Cagliari sozinha serve 42 rotas: metade dos destinos diretos ficava
+    // com estimativa. Buscar por país tampouco resolvia — essa consulta também
+    // corta em 20, e ampliar de oito para catorze países não mudava nada.
+    //
+    // O que resolve é pedir os destinos pelo nome: `arrivalAirportIataCodes`
+    // aceita uma lista, então partimos as rotas de cada saída em lotes de 15 e
+    // juntamos as respostas. São 3 requisições por aeroporto e o mapa vai
+    // acendendo as estrelas a cada lote, sem esperar o fim.
+    let lotesFeitos = 0;
+    const lotesTotais = saidas.reduce(
+      (n, s) => n + Math.ceil((rotasUteis.get(s.iata)?.length || 0) / RYA.LOTE_DESTINOS), 0);
 
-    for (const cc of prioritarios) {
+    for (const saida of saidas) {
       if (signal.aborted || RYA.estaBloqueado()) break;
-      paisesJaVistos.add(cc);
-      for (const saida of saidas.slice(0, 2)) {
-        const novas = await RYA.fetchFares(saida.iata, state.month, state.days, signal, cc);
-        if (novas.size) juntar(novas, saida);
-      }
-      aplicar();
+      const rotas = rotasUteis.get(saida.iata) || [];
+      if (!rotas.length) continue;
+
+      await RYA.sweepFares(saida.iata, rotas, state.month, state.days, signal, novas => {
+        if (signal.aborted) return;
+        lotesFeitos++;
+        if (novas.size) { juntar(novas, saida); aplicar(); }
+        // depois do aplicar(), que também mexe no aviso
+        setFareStatus('varrendo', { feitos: lotesFeitos, total: lotesTotais });
+      });
     }
+    if (!signal.aborted) setFareStatus(acumulado.size ? 'ok' : 'none');
 
     // Rede de escalas das saídas mais próximas, para o filtro do mapa.
     const alcanceTotal = new Map();
@@ -633,7 +600,7 @@ function distanciaSimples(a, b) {
   return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-function setFareStatus(kind) {
+function setFareStatus(kind, progresso = null) {
   const box = $('#fareStatus');
   if (!box) return;
   const n = state.realFares.size;
@@ -647,6 +614,9 @@ function setFareStatus(kind) {
 
   const texts = {
     loading:   ['…', 'buscando preços reais de voo'],
+    varrendo:  [String(n), progresso
+                  ? `varrendo destinos — ${progresso.feitos} de ${progresso.total}`
+                  : 'varrendo destinos'],
     pausa:     ['', 'muitas consultas seguidas — pausando alguns minutos'],
     ok:        [String(n), `preços reais${saidas ? ' de ' + saidas : ''}`],
     uncovered: ['', 'sem voos Ryanair perto da sua origem — voos estimados'],
@@ -654,6 +624,7 @@ function setFareStatus(kind) {
   };
   const [num, label] = texts[kind] || texts.none;
   box.dataset.kind = kind;
+  $('.map-wrap')?.classList.toggle('buscando', kind === 'loading' || kind === 'varrendo');
   box.innerHTML = num
     ? `<b>${num}</b><span>${esc(label)}</span>`
     : `<span>${esc(label)}</span>`;

@@ -737,3 +737,35 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .pin.pin-direto{box-shadow:0 0 0 1.5px rgba(255,210,74,.55), 0 3px 10px rgba(0,0,0,.5)}
 .dot-star-vazia{color:rgba(255,210,74,.85)}
 .tip-direto{color:#ffd24a;font-size:11px;opacity:.9}
+
+/* ============ RADAR DE VARREDURA ============
+   Anéis que se abrem a partir da origem enquanto os preços reais chegam.
+   O marcador existe sempre (para acompanhar o mapa sozinho) e só fica
+   visível quando .map-wrap ganha .buscando. */
+.radar-icon{pointer-events:none}
+.radar{position:absolute;left:0;top:0;width:0;height:0;opacity:0;
+  transition:opacity .4s ease}
+.map-wrap.buscando .radar{opacity:1}
+.radar i{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+  border:1.5px solid var(--origin);border-radius:50%;opacity:0;
+  animation:radar-onda 3s cubic-bezier(.2,.6,.35,1) infinite}
+.radar i:nth-child(2){animation-delay:1s}
+.radar i:nth-child(3){animation-delay:2s}
+.map-wrap:not(.buscando) .radar i{animation-play-state:paused}
+
+@keyframes radar-onda{
+  0%  {transform:scale(.35);opacity:.85}
+  70% {opacity:.18}
+  100%{transform:scale(9);opacity:0}
+}
+
+/* enquanto varre, o contador ganha um pulso discreto */
+.map-fare[data-kind="varrendo"] b,
+.map-fare[data-kind="loading"] span{animation:fare-pulso 1.4s ease-in-out infinite}
+@keyframes fare-pulso{50%{opacity:.5}}
+
+@media (prefers-reduced-motion:reduce){
+  .radar i{animation:none;opacity:.3;transform:scale(3)}
+  .map-fare[data-kind="varrendo"] b,
+  .map-fare[data-kind="loading"] span{animation:none}
+}

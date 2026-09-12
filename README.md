@@ -133,14 +133,24 @@ Cada linha diz de onde o voo parte e a que distância ("parte de AHO, a 107 km d
 você"), para a pessoa julgar se compensa o deslocamento — Budapeste, por
 exemplo, só aparece porque Alghero entrou na conta.
 
-**Varredura por país.** A consulta sem filtro devolve só os 20 destinos mais
-baratos. Mas a API aceita `arrivalCountryCode`, então o site varre também país a
-país (em grupos de 4, para não atropelar o serviço) e junta tudo. Em
-Milão-Bergamo isso levou a cobertura de 19 para **67 destinos**; casando com a
-nossa base de cidades, de ~12 para **26 com preço confirmado**.
+**Varredura em lotes.** A consulta sem filtro devolve só os 20 destinos mais
+baratos, e Cagliari sozinha serve 42 rotas — metade dos destinos diretos ficava
+sem preço. Filtrar por país não resolvia: essa consulta também corta em 20.
 
-A tela não espera por isso: a consulta geral chega primeiro e já preenche o
-mapa; os países vão entrando depois, em ondas.
+O que resolve é pedir os destinos pelo nome. O parâmetro é
+`arrivalAirportIataCodes` — **no plural**, separado por vírgula; a forma singular
+e a repetição do parâmetro devolvem zero ofertas, sem erro. Como a resposta tem
+teto de 20 (`limit=50` devolve HTTP 400), o site parte a malha de cada saída em
+**lotes de 15** e junta as respostas.
+
+Saindo de Olbia, as rotas das 4 saídas próximas são 50 destinos distintos: saem
+em **6 lotes, ~4 segundos**, e o que sobra sem preço são só os que não têm voo
+nenhum na janela pedida. A cobertura dos voos diretos vai a **100%** — nenhuma
+estrela vazia no mapa.
+
+A tela não espera o fim: cada lote que chega já acende suas estrelas, e um
+**radar** sobre a origem mostra que a varredura está correndo (`→` seção
+seguinte).
 
 ### Orçamento de requisições
 
@@ -154,16 +164,17 @@ O site foi reorganizado em torno de um orçamento:
 
 | Momento | Requisições |
 |---|---|
-| Abertura (por origem/mês/dias) | **21** — consulta geral das 5 saídas + rede de escalas |
-| Navegando o mapa | até 4 países por movimento, cada um só uma vez |
-| Abrir um destino | **2** — confere se existe voo direto para ele |
+| Abertura (por origem/mês/dias) | **~7** — 1 consulta geral + ~6 lotes de destinos |
+| Malha de rotas (1ª vez, cache de 30 dias) | 1 por saída |
+| Rede de escalas | em segundo plano, só para o filtro do mapa |
+| Navegando o mapa | **0** — a varredura já cobriu tudo |
+| Abrir um destino | **2** — confere o par exato, com as datas certas |
 | Sem voo direto | ~20 — procura os outros caminhos, guardada por destino |
 
-Essa consulta de 2 requisições ao abrir um destino é o contrapeso da varredura
-por região: sem ela, o Porto tinha voo direto de Cagliari e ficava marcado como
-"sem preço confirmado" — porque não estava entre os 20 mais baratos de nenhuma
-saída e a pessoa não tinha passado por Portugal no mapa. Conferir um par
-específico é a busca mais barata que existe, e resolve a maioria dos casos.
+A varredura em lotes substituiu a varredura por país, que custava 16 requisições
+para cobrir 80% dos destinos e voltava a gastar a cada movimento do mapa. Os
+lotes custam menos, cobrem tudo e acabam na abertura — navegar o mapa depois
+disso não consome nada.
 
 > **A armadilha que causou o bloqueio.** O enquadramento automático do trajeto
 > movia o mapa; mover o mapa dispara `moveend`; `moveend` refaz a busca; a busca
@@ -186,8 +197,8 @@ O que segura isso:
 - **Pausa automática**: ao receber 403 ou 429, o site para por 5 minutos,
   descarta a fila e avisa na tela. Insistir é o que transforma um limite
   temporário em bloqueio longo.
-- **Varredura por região**: em vez de varrer a Europa inteira na abertura (66
-  requisições), o site pede só os países que entraram na tela.
+- **Lotes**: pedir 15 destinos por consulta em vez de um por vez é o que torna a
+  cobertura total barata — 50 destinos em 6 requisições.
 - **Atraso curto**: a busca de caminhos espera 700 ms com o destino aberto
   antes de disparar. Passear pelo mapa clicando em vários destinos não consome
   nada; só o que fica aberto é consultado. Um botão para pedir a busca chegou a
@@ -414,25 +425,39 @@ aí a sua escolha manda.
 > consultas), e o preço chega ao abrir.
 >
 > No mapa, ★ cheia é preço confirmado e ☆ vazada é "tem voo direto, preço a
-> consultar". De Olbia isso levou o filtro de 30 para **41 destinos**.
+> consultar". De Olbia isso levou o filtro de 30 para **41 destinos** — e, com a
+> varredura em lotes, os 41 saem com ★ cheia.
 
-### Por que alguns voos diretos vêm sem preço
+### O teto de 20 ofertas, e como contorná-lo
 
 **A API devolve no máximo 20 ofertas por consulta.** Cagliari sozinha serve 42
-rotas: pedindo as tarifas do aeroporto, vêm as 20 mais baratas e as outras 22
-ficam de fora. Pedir com `arrivalCountryCode` traz até 20 daquele país — ajuda,
-mas o teto é o mesmo.
+rotas: pedindo as tarifas do aeroporto vêm as 20 mais baratas e as outras 22
+ficam de fora. `arrivalCountryCode` traz até 20 daquele país — o teto é o mesmo,
+e por isso ampliar a varredura de oito para catorze países não mudava nada.
 
-Na prática, depois da consulta geral mais oito países, a cobertura fica em
-**~80% dos destinos diretos**. Ampliar de oito para catorze países não mudou
-nada (os que faltam não estão entre os 20 mais baratos do próprio país), só
-gastava mais requisições.
+A saída é dizer **quais** destinos queremos. O parâmetro certo é
+`arrivalAirportIataCodes`, no plural e separado por vírgula:
 
-Os ~20% restantes só são alcançáveis pedindo o **par exato**
-(`arrivalAirportIataCode`), o que custa duas consultas por destino. Fazer isso
-para todos seria voltar ao volume que nos bloqueou, então é feito quando a
-pessoa abre o destino: ela vê ☆ no mapa, abre, e o preço chega. Paga-se só pelo
-que é olhado.
+| Forma | Resultado |
+|---|---|
+| `arrivalAirportIataCode=OPO&arrivalAirportIataCode=DUS` (repetido) | 0 ofertas |
+| `arrivalAirportIataCode=OPO,DUS` (singular com vírgula) | 0 ofertas |
+| `arrivalAirportIataCodes=OPO,DUS` | funciona |
+| `limit=50` | HTTP 400 |
+
+As duas primeiras formas devolvem **200 com zero ofertas** — falham em silêncio,
+que é o pior jeito de falhar. Vale conferir a contagem de respostas, não só o
+código HTTP.
+
+Com a lista aceita, a conta muda de figura: manda-se 15 códigos por consulta
+(abaixo do teto de 20, para nenhum ser cortado) e recebe-se o preço de todos.
+As 42 rotas de Cagliari saem em **3 requisições e 1,7 segundo**; as 50 rotas das
+quatro saídas de Olbia, em 6 requisições e ~4 segundos. A cobertura dos voos
+diretos passou de ~80% para **100%**.
+
+A consulta do **par exato** (`arrivalAirportIataCode`, singular, sozinho)
+continua servindo para quando a pessoa abre um destino: ali interessam as datas
+e os voos concretos, não só o menor preço.
 
 Dentro do mapa há dois botões, com a contagem de cada um:
 
@@ -508,9 +533,9 @@ O site usa os **5 aeroportos mais próximos** num raio de 260 km, e o filtro
 Cagliari. De Olbia isso significa OLB, FSC, AHO, **CAG** e **FCO (Roma)**, e leva
 os voos diretos de 19 para **38**.
 
-O custo é controlado escalonando o esforço: consulta geral em todas as cinco
-saídas (uma requisição cada), varredura país a país só nas duas mais próximas, e
-rede de escalas nas três primeiras. A caixa do mapa mostra de quais aeroportos
+O custo é controlado escalonando o esforço: uma consulta geral na saída mais
+próxima para a primeira pintura, varredura em lotes na malha de todas elas, e
+rede de escalas nas duas primeiras. A caixa do mapa mostra de quais aeroportos
 as tarifas realmente vieram.
 
 ### Distância em linha reta não é distância de estrada
