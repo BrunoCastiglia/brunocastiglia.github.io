@@ -933,7 +933,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
  * Guardar por destino evita refazer a busca quando a pessoa volta a um lugar
  * que já olhou — o caso mais comum de repetição.
  */
-function prepararBuscaDeCaminhos(r) {
+async function prepararBuscaDeCaminhos(r) {
   const caixa = $('#conexaoBox');
   if (!caixa) return;
 
@@ -943,6 +943,19 @@ function prepararBuscaDeCaminhos(r) {
     mostrarCaminhos({ ...guardado, r });
     return;
   }
+
+  // Primeiro o barato: existe voo direto para ESTE destino?
+  //
+  // A varredura geral traz só os 20 mais baratos de cada saída, e a varredura
+  // por região depende de a pessoa passar por lá. O Porto tem voo direto de
+  // Cagliari e não aparecia em nenhuma das duas — mas conferir um par
+  // específico custa duas consultas, contra as ~12 da busca de caminhos.
+  caixa.hidden = false;
+  caixa.classList.remove('conexao-direta', 'duas-opcoes');
+  caixa.innerHTML = '<span class="conexao-load">conferindo se há voo direto…</span>';
+
+  const achou = await tentarVooDireto(r);
+  if (achou || state.selected !== r.dest.id) return;   // já virou preço confirmado
 
   caixa.hidden = false;
   caixa.classList.remove('conexao-direta', 'duas-opcoes');
@@ -957,6 +970,35 @@ function prepararBuscaDeCaminhos(r) {
       <span>Procurar caminhos: voo + ônibus, ou escala pela malha da companhia</span>
     </button>`;
   $('#btnCaminhos').addEventListener('click', () => buscarConexao(r), { once:true });
+}
+
+/**
+ * Confere se alguma das saídas próximas tem voo direto para este destino.
+ * Duas consultas por saída, no máximo duas saídas: é a busca mais barata que
+ * existe e resolve a maioria dos casos.
+ */
+async function tentarVooDireto(r) {
+  if (r.real || r.useGround || !state.airports.length) return false;
+  if (RYA.estaBloqueado()) return false;
+
+  const destApt = RYA.nearestAirport(state.airports, r.dest, 130);
+  if (!destApt) return false;
+
+  // Todas as saídas, não só as duas primeiras: Cagliari é a terceira mais
+  // próxima de Olbia e é justamente ela que voa para o Porto. Conferir a rota
+  // é de graça (cache de 30 dias); só gasta consulta quando a rota existe.
+  for (const saida of state.originAirports) {
+    if (saida.iata === destApt.iata) continue;
+    const rotas = await RYA.routesFrom(saida.iata);      // cache de 30 dias
+    if (!rotas.some(x => x.iata === destApt.iata)) continue;
+
+    const preco = await RYA.directRoundTrip(saida.iata, destApt.iata, state.month, state.days);
+    if (preco) {
+      registrarTarifaEncontrada(r.dest.id, { ...preco, saida }, destApt);
+      return true;
+    }
+  }
+  return false;
 }
 
 /* ------------------------------------------- trajeto com escala --------- */

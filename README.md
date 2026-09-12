@@ -153,8 +153,14 @@ O site foi reorganizado em torno de um orçamento:
 |---|---|
 | Abertura (por origem/mês/dias) | **21** — consulta geral das 5 saídas + rede de escalas |
 | Navegando o mapa | até 4 países por movimento, cada um só uma vez |
-| Abrir um destino | **0** — a busca de caminhos só roda se a pessoa clicar |
-| Quando ela roda | ~12, guardada por destino |
+| Abrir um destino | **2** — confere se existe voo direto para ele |
+| Procurar caminhos | ~12, só ao clicar no botão, guardada por destino |
+
+Essa consulta de 2 requisições ao abrir um destino é o contrapeso da varredura
+por região: sem ela, o Porto tinha voo direto de Cagliari e ficava marcado como
+"sem preço confirmado" — porque não estava entre os 20 mais baratos de nenhuma
+saída e a pessoa não tinha passado por Portugal no mapa. Conferir um par
+específico é a busca mais barata que existe, e resolve a maioria dos casos.
 
 O que segura isso:
 
