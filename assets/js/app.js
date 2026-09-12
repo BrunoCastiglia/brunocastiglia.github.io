@@ -45,6 +45,7 @@ const state = {
   viaEscala: new Map(),   // destino -> escala, pela malha da Ryanair
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
   destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
+  caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
   intro: true,            // primeira abertura: anima do mundo até a origem
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
@@ -132,15 +133,66 @@ function esconderRota() {
   svgRota?.classList.remove('is-on', 'is-conexao');
 }
 
-/** Redesenha o trajeto do destino selecionado (com escala, se houver). */
-function desenharRotaFixa() {
+/**
+ * Redesenha o trajeto do destino selecionado, com todas as suas paradas.
+ *
+ * O caminho fica guardado em state.caminho porque os trajetos com escala e os
+ * "voo + terra" precisam sobreviver a tirar o mouse do pino e a mover o mapa.
+ * Antes isso caía no arco simples origem–destino e as paradas sumiam.
+ */
+function desenharRotaFixa({ animar = false } = {}) {
   const r = state.results.find(x => x.dest.id === state.selected);
   if (!r) { svgRota?.classList.remove('is-on', 'is-conexao'); return; }
-  if (state.conexao && state.conexao.destId === state.selected) {
-    desenharConexao(state.conexao);
-  } else {
-    svgRota?.classList.remove('is-conexao');
-    mostrarRota(r.dest);
+
+  if (state.caminho?.destId === state.selected) {
+    desenharCaminho(state.caminho.pontos, { animar });
+  } else if (state.origin) {
+    desenharCaminho([state.origin, r.dest], { animar });
+  }
+}
+
+/** Guarda o trajeto do destino aberto para poder redesenhá-lo depois. */
+function fixarCaminho(destId, pontos) {
+  state.caminho = { destId, pontos };
+  desenharCaminho(pontos);
+}
+
+/**
+ * Desenha um trajeto passando por todas as paradas informadas.
+ * Dois pontos: arco simples. Mais que isso: curvas menores, encadeadas.
+ */
+function desenharCaminho(pontos, { animar = true } = {}) {
+  if (!svgRota || !pontos || pontos.length < 2) return;
+
+  const p = pontos.map(x => map.latLngToContainerPoint([x.lat, x.lon]));
+  if (Math.hypot(p[0].x - p.at(-1).x, p[0].y - p.at(-1).y) < 12) return;
+
+  const escala = pontos.length > 2;
+  const curva = (a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy) || 1;
+    const alt = Math.min(escala ? 90 : 160, (escala ? 14 : 24) + dist * (escala ? 0.16 : 0.22));
+    return `Q ${(a.x + b.x) / 2 - (dy / dist) * alt} ${(a.y + b.y) / 2 + (dx / dist) * alt} ${b.x} ${b.y}`;
+  };
+
+  const d = p.slice(1).reduce((acc, ponto, i) => `${acc} ${curva(p[i], ponto)}`,
+    `M ${p[0].x} ${p[0].y}`);
+  pathRota.setAttribute('d', d);
+  pathSombra.setAttribute('d', d);
+
+  const comp = pathRota.getTotalLength();
+  for (const el of [pathRota, pathSombra]) {
+    el.style.transition = 'none';
+    el.style.strokeDasharray = comp;
+    el.style.strokeDashoffset = animar ? comp : 0;
+  }
+  svgRota.classList.add('is-on');
+  svgRota.classList.toggle('is-conexao', escala);
+  if (!animar) return;
+
+  void pathRota.getBoundingClientRect();
+  for (const el of [pathRota, pathSombra]) {
+    el.style.transition = 'stroke-dashoffset .7s cubic-bezier(.32,.72,.3,1)';
+    el.style.strokeDashoffset = '0';
   }
 }
 
@@ -346,10 +398,11 @@ async function loadRealFares() {
 
     state.airports = airports;
 
-    // Até 3 aeroportos de partida. Quem está no interior da Sardenha tem
-    // Olbia, Cagliari e Alghero à volta — considerar só um escondia a maior
-    // parte das rotas possíveis.
-    const saidas = RYA.nearestAirports(airports, state.origin, 260, 3);
+    // Até 5 aeroportos de partida num raio de 260 km. Três não bastavam: quem
+    // está em Olbia tem Figari e Alghero mais perto que Cagliari, e Cagliari é
+    // justamente a que mais voa. Quem sai de um, sai de qualquer um — o filtro
+    // "só voo direto" precisa enxergar todos.
+    const saidas = RYA.nearestAirports(airports, state.origin, 260, 5);
     state.originAirports = saidas;
     state.originAirport = saidas[0] || null;
     if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
@@ -381,8 +434,8 @@ async function loadRealFares() {
       search({ refit:false });                  // refaz a conta com preço real
     };
 
-    // Primeiro a consulta geral de cada saída (rápida), depois a varredura por
-    // país — assim a tela responde antes de a busca completa terminar.
+    // Primeiro a consulta geral de TODAS as saídas (uma requisição cada): é
+    // rápido e já põe os destinos mais baratos de cada aeroporto no mapa.
     for (const saida of saidas) {
       const rapidas = await RYA.fetchFares(saida.iata, state.month, state.days, signal);
       if (signal.aborted) return;
@@ -390,7 +443,10 @@ async function loadRealFares() {
       aplicar();
     }
 
-    for (const saida of saidas) {
+    // Depois a varredura país a país, só nas duas saídas mais próximas — ela
+    // custa uma requisição por país, e fazer isso em cinco aeroportos seria
+    // pesado demais para uma API pública.
+    for (const saida of saidas.slice(0, 2)) {
       const todas = await RYA.fetchAllFares(
         saida.iata, state.month, state.days, paises, signal,
         parciais => { juntar(parciais, saida); aplicar(); },
@@ -404,7 +460,7 @@ async function loadRealFares() {
 
     // Rede de escalas das três saídas, para o filtro do mapa.
     const alcanceTotal = new Map();
-    for (const saida of saidas) {
+    for (const saida of saidas.slice(0, 3)) {
       const alcance = await RYA.reachableWithStop(saida.iata, signal, parcial => {
         for (const [k, v] of parcial) if (!alcanceTotal.has(k)) alcanceTotal.set(k, { hub:v, saida });
         if (!signal.aborted) casarEscalas(alcanceTotal, airports);
@@ -455,7 +511,13 @@ function setFareStatus(kind) {
   if (!box) return;
   const n = state.realFares.size;
   const apt = state.originAirport;
-  const saidas = state.originAirports.map(a => a.iata).join(', ');
+  // mostra só os aeroportos que de fato renderam alguma tarifa
+  const usados = new Set([...state.realFares.values()].map(f => f.saida?.iata).filter(Boolean));
+  const saidas = state.originAirports
+    .filter(a => usados.has(a.iata))
+    .map(a => a.iata)
+    .join(', ');
+
   const texts = {
     loading:   ['…', 'buscando preços reais de voo'],
     ok:        [String(n), `preços reais${saidas ? ' de ' + saidas : ''}`],
@@ -475,6 +537,12 @@ function setFareStatus(kind) {
   if (caixa) {
     caixa.hidden = n === 0;
     $('#countDireto').textContent = n || '';
+    const btnD = $('#btnDireto');
+    if (btnD) {
+      btnD.title = usados.size > 1
+        ? `Voos diretos saindo de ${[...usados].join(', ')} — todos perto de você`
+        : 'Voos diretos com preço confirmado';
+    }
     $('#countConfirmado').textContent = n + comEscala || '';
     if (!n && state.filtro !== 'todos') {   // ficou sem tarifas: desliga sozinho
       state.filtro = 'todos';
@@ -517,7 +585,8 @@ function select(id, { fly = false } = {}) {
   $('#detailsHandle').setAttribute('aria-expanded', 'true');
   ajustarAlturaAoConteudo();
   state.conexao = null;
-  desenharRotaFixa();
+  state.caminho = null;          // o trajeto do destino anterior não vale mais
+  desenharRotaFixa({ animar:true });
 }
 
 /* ---------------------------------------------------------- detalhes --- */
@@ -954,7 +1023,11 @@ async function buscarConexao(r) {
       ${avisoEspera}
     </p>`;
 
-  desenharConexao(state.conexao);
+  // trajeto completo: de onde a pessoa está, pela escala, até o destino
+  const paradas = [state.origin];
+  if (c.partida && c.partida.km > 40) paradas.push(c.partida);
+  paradas.push(c.hub, r.dest);
+  fixarCaminho(alvo, paradas);
 }
 
 /**
@@ -995,7 +1068,7 @@ function mostrarDiretoDeLonge(d, destApt, r) {
 
   state.conexao = null;
   realcarBusca(false);
-  desenharRotaDireta(d, r.dest);
+  fixarCaminho(r.dest.id, [state.origin, d.saida, r.dest]);
 }
 
 /** Mostra o caminho "voe até X, siga por terra até Y". */
@@ -1042,68 +1115,11 @@ function mostrarVooMaisTerra(c, r) {
 
   state.conexao = null;
   realcarBusca(false);
-  desenharRotaDireta({ saida:c.saida, ...c }, c.d);
+  // origem → aeroporto de partida → cidade vizinha → destino final
+  fixarCaminho(r.dest.id, [state.origin, c.saida, c.d, r.dest]);
 }
 
-/** Arco da origem até o aeroporto vizinho e daí ao destino. */
-function desenharRotaDireta(d, dest) {
-  if (!svgRota || !state.origin) return;
-  const pts = [
-    map.latLngToContainerPoint([state.origin.lat, state.origin.lon]),
-    map.latLngToContainerPoint([d.saida.lat, d.saida.lon]),
-    map.latLngToContainerPoint([dest.lat, dest.lon]),
-  ];
-  const curva = (a, b) => {
-    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy) || 1;
-    const alt = Math.min(90, 14 + dist * 0.16);
-    return `Q ${(a.x + b.x) / 2 - (dy / dist) * alt} ${(a.y + b.y) / 2 + (dx / dist) * alt} ${b.x} ${b.y}`;
-  };
-  const caminho = `M ${pts[0].x} ${pts[0].y} ${curva(pts[0], pts[1])} ${curva(pts[1], pts[2])}`;
-  pathRota.setAttribute('d', caminho);
-  pathSombra.setAttribute('d', caminho);
-  const comp = pathRota.getTotalLength();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'none';
-    el.style.strokeDasharray = comp;
-    el.style.strokeDashoffset = comp;
-  }
-  svgRota.classList.add('is-on', 'is-conexao');
-  void pathRota.getBoundingClientRect();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'stroke-dashoffset .8s cubic-bezier(.32,.72,.3,1)';
-    el.style.strokeDashoffset = '0';
-  }
-}
 
-/** Desenha no mapa o caminho origem → escala → destino. */
-function desenharConexao(c) {
-  if (!svgRota || !c) return;
-  const pts = [
-    map.latLngToContainerPoint([c.origem.lat, c.origem.lon]),
-    map.latLngToContainerPoint([c.hub.lat, c.hub.lon]),
-    map.latLngToContainerPoint([c.destino.lat, c.destino.lon]),
-  ];
-  const curva = (a, b) => {
-    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy) || 1;
-    const alt = Math.min(90, 14 + dist * 0.16);
-    return `Q ${(a.x + b.x) / 2 - (dy / dist) * alt} ${(a.y + b.y) / 2 + (dx / dist) * alt} ${b.x} ${b.y}`;
-  };
-  const d = `M ${pts[0].x} ${pts[0].y} ${curva(pts[0], pts[1])} ${curva(pts[1], pts[2])}`;
-  pathRota.setAttribute('d', d);
-  pathSombra.setAttribute('d', d);
-  const comp = pathRota.getTotalLength();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'none';
-    el.style.strokeDasharray = comp;
-    el.style.strokeDashoffset = comp;
-  }
-  svgRota.classList.add('is-on', 'is-conexao');
-  void pathRota.getBoundingClientRect();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'stroke-dashoffset .8s cubic-bezier(.32,.72,.3,1)';
-    el.style.strokeDashoffset = '0';
-  }
-}
 
 /* ------------------------------- inventário real de hospedagens (OSM) --- */
 let osmAbort;

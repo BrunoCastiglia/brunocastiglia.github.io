@@ -400,7 +400,24 @@ Acima disso deixa de ser escala e vira outra viagem. As janelas tentadas são
 6 h, 12 h e 28 h, nessa ordem; se nada couber, o trajeto é descartado e o site
 procura outro caminho em vez de oferecer dois dias num aeroporto.
 
-### Três aeroportos de partida não bastam
+### Cinco aeroportos de partida
+
+O site usa os **5 aeroportos mais próximos** num raio de 260 km, e o filtro
+"só voo direto" enxerga todos — quem pode sair de Olbia também pode sair de
+Cagliari. De Olbia isso significa OLB, FSC, AHO, **CAG** e **FCO (Roma)**, e leva
+os voos diretos de 19 para **38**.
+
+O custo é controlado escalonando o esforço: consulta geral em todas as cinco
+saídas (uma requisição cada), varredura país a país só nas duas mais próximas, e
+rede de escalas nas três primeiras. A caixa do mapa mostra de quais aeroportos
+as tarifas realmente vieram.
+
+> **Limitação conhecida:** a distância é em linha reta. Saindo de uma ilha, um
+> aeroporto "a 250 km" pode exigir balsa ou voo — Roma aparece a 250 km de Olbia
+> com o mar no meio. A tela sempre mostra a distância, mas não sabe se existe
+> estrada.
+
+### Três aeroportos de partida não bastavam
 
 O caso que expôs isso: de **Olbia para o Porto**, o site oferecia uma escala
 longa. Mas Olbia tem Figari (73 km) e Alghero (107 km) mais perto que Cagliari
