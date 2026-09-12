@@ -685,6 +685,40 @@ sem proteção de conexão, e tudo é calculado automaticamente, sem revisão hu
 a partir de dados públicos que mudam a todo momento — para explorar
 possibilidades, não como garantia.
 
+## A ordem dos passos na tela
+
+O mapa é o fundo da página; a barra superior e a lateral pairam sobre ele. A
+disposição segue a ordem em que a pessoa decide, não a ordem em que os campos
+existem:
+
+1. **Barra superior, primeira linha** — de onde sai e (opcional) para onde quer
+   ir, lado a lado. São as duas pontas da viagem.
+2. **Barra superior, segunda linha** — **quanto se tem**, ocupando a largura
+   inteira: slider centralizado, moeda à esquerda, valor à direita. É a pergunta
+   que o site responde, então é o maior controle da tela. O campo aceita valores
+   acima do teto do slider; passando de € 1.000 o trilho se apaga, porque ali
+   quem manda é o número digitado.
+3. **Lateral esquerda** — quando viaja (por duração ou por datas), quantos são,
+   o que entra na conta e o estilo. Ajustes, depois da escolha principal.
+
+Antes tudo isso era uma coluna só à esquerda, com o orçamento perdido entre a
+origem e a duração. Quem abria o site não tinha um primeiro passo óbvio.
+
+O slider tem trilho de 10 px e polegar de 26 px. Em 4 px ele lia como uma linha
+divisória — a pessoa não percebia que dava para pegar. A parte preenchida é
+pintada por um gradiente cujo ponto de virada vem de `--pct`, escrito pelo JS a
+cada movimento: um `input[type=range]` nativo pinta o trilho inteiro de uma cor
+só, não há como fazer isso em CSS puro.
+
+`--topbar-h` é medido em tempo real por um `ResizeObserver`. A barra muda de
+altura sozinha (a dica sob a origem passa de "digite 3 letras" para "Itália ·
+detectado pelo IP", os campos embrulham em telas estreitas), e a lateral e os
+avisos do mapa se posicionam a partir dela. Com um valor fixo no CSS, ora
+sobrava um vão, ora a lateral entrava por baixo.
+
+Abaixo de 880 px nada flutua: barra e lateral voltam a ser blocos empilhados e
+o mapa fica entre eles.
+
 ## A barra lateral é só o formulário
 
 A lateral esquerda tem apenas os campos da busca. A lista de destinos saiu: o
@@ -744,6 +778,45 @@ ajusta é a busca. A única exceção é a animação de abertura.
 Ao clicar num destino o mapa desliza até ele, mas isso **não** dispara nova
 busca: movimentos feitos pelo próprio site são marcados com `state.ignorarMove`
 para a lista não se refazer sozinha a cada clique.
+
+## Contraste: o que foi medido
+
+As cores foram escolhidas medindo, não olhando. O tema claro herdou tons pensados
+para fundo escuro, e três deles reprovavam:
+
+| Elemento | Antes | Agora |
+|---|---|---|
+| ★ sobre a pílula de preço | **1,58:1** | 4,59:1 |
+| dicas sob os campos | **2,89:1** | 5,00:1 |
+| selo "mais barata" (9 px) | **4,05:1** | 5,5:1 |
+| pílula "cabe" (texto) | 5,54:1 | 6,26:1 |
+| pílula "quase lá" | 5,99:1 | 5,44:1 |
+
+A mudança de fundo das pílulas foi a maior: elas eram verde e âmbar vivos com
+texto escuro, e sobre tiles claros quase não se destacavam do mapa. Agora são
+verde e âmbar **escuros com texto branco** — o texto vai de 3,0:1 para 6,3:1 e a
+pílula em si ganha 4,5:1 contra o mapa.
+
+Isso obrigou a separar duas famílias de variável que antes eram uma só:
+`--fit` / `--tight` são a cor do **dado** (pontos da legenda, números das
+estatísticas, texto sobre branco) e continuam vivas; `--fit-pino` / `--tight-pino`
+são o **fundo da pílula**, que carrega texto branco. Usar o mesmo tom nos dois
+papéis é o que fazia um deles falhar sempre.
+
+A estrela seguiu o mesmo raciocínio: `--gold` escuro para texto sobre branco,
+`--gold-pino` claro para a estrela sobre a pílula escura.
+
+O ponto dos destinos fora do orçamento era `#4a3038`, um vinho escuro herdado do
+tema escuro que sobre mapa claro virava sujeira. Virou ponto branco com aro
+vermelho: lê como marcador desligado, visível sem competir com os preços.
+
+> **Como medir de verdade.** Comparar `getComputedStyle().color` com o
+> `backgroundColor` do pai dá números errados quando o fundo é translúcido — e
+> quase todos os nossos são (`--gold-bg` é `#f5b32b14`). O valor vem como
+> `rgba(...)` e, se o alfa for ignorado, compara-se o texto contra a cor **sólida**
+> da tinta. Numa medição assim o preço do card verde apareceu como 1,45:1
+> (reprovado) quando na verdade é 4,82:1. É preciso compor cada camada
+> translúcida até achar um fundo opaco, e só então calcular.
 
 ## Tema claro
 

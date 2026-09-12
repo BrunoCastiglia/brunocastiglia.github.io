@@ -22,13 +22,15 @@
      vira ruído e a pessoa perde a referência do que é importante. */
   --txt:#18222f;
   --txt-dim:#5b6b7e;
-  --txt-faint:#8593a4;
+  /* #8593a4 dava 2,89:1 sobre o fundo da página — reprovado. As dicas sob os
+     campos são texto de verdade, não decoração: subiram para 4,6:1. */
+  --txt-faint:#63717f;
 
   /* ---- cor da marca ----
      O verde do tema escuro (#2dd4a7) tem contraste 2,1:1 sobre branco: serve
      de fundo, não de texto. No claro ele fica escuro o bastante para ler, e o
      tom vivo migra para os fundos de pílula (--accent-bg / --accent-chip). */
-  --accent:#0d9a72;
+  --accent:#0a7d5c;
   --accent-2:#0b7f80;
   --accent-ink:#ffffff;
   --accent-bg:#0d9a720f;
@@ -39,9 +41,15 @@
   /* ---- veredito do orçamento ----
      Verde/âmbar/vermelho, cada um com a tinta que garante leitura quando ele
      é fundo de pílula no mapa. */
-  --fit:#0fa97c;      --fit-ink:#04231b;
-  --tight:#e0a020;    --gold-ink:#3a2c00;
-  --over:#d94452;
+  /* Duas famílias, e a distinção importa:
+     --fit / --tight são a cor do DADO (pontos da legenda, números das
+     estatísticas, texto sobre branco) e precisam ser vivas;
+     --*-pino é o fundo da pílula no mapa, que carrega texto branco em 11,5 px
+     sobre tiles claros. O tom vivo ali dava 3,0:1 com branco — reprovado — e
+     quase não se destacava do mapa. Escurecido, vai a 6,3:1. */
+  --fit:#0fa97c;      --fit-pino:#0a6e4f;   --fit-ink:#ffffff;
+  --tight:#e0a020;    --tight-pino:#965d00; --gold-ink:#3a2c00;
+  --over:#d94452;     --over-pino:#b03040;
   --over-bg:#fdeced;  --over-ink:#a5323d;  --over-line:#d9445259;
 
   /* ---- origem ---- */
@@ -51,8 +59,11 @@
      Dois papéis distintos: --gold-solid é fundo de selo (precisa ser vivo) e
      --gold é texto e borda (precisa ser escuro para ler sobre branco). Usar o
      mesmo tom nos dois era o que sumia no tema claro. */
-  --gold:#9a6a00;
+  --gold:#845a00;
   --gold-solid:#f5b32b;
+  /* A estrela fica sobre a pílula escura do mapa, não sobre branco: ali o
+     dourado escuro sumia (1,58:1). Este tom claro dá 4,3:1 no verde. */
+  --gold-pino:#ffd970;
   --gold-bg:#f5b32b14;
   --gold-bg-forte:#f5b32b2e;
   --gold-line:#d99a0866;
@@ -64,7 +75,11 @@
   --mapa-fundo:#e8edf1;
 
   --radius:12px;
-  --sidebar-w:352px;
+  --sidebar-w:312px;
+  /* Origem dos avisos sobre o mapa: à direita da lateral flutuante e abaixo da
+     barra superior, cuja altura o JS mede e escreve em --topbar-h. */
+  --mapa-esq:calc(var(--sidebar-w) + 24px);
+  --mapa-topo:calc(var(--topbar-h, 118px) + 24px);
   --details-h:clamp(92px, 10vh, 132px);
   --shadow:0 6px 20px rgba(23,43,77,.10), 0 1px 3px rgba(23,43,77,.08);
   --font:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -83,11 +98,66 @@ button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* ---------------------------------------------------------- topo ----- */
+/* ============ BARRA SUPERIOR FLUTUANTE =================================
+   O mapa é o fundo da página: a barra é um cartão que paira sobre ele, com
+   margem nos quatro lados, para o mapa continuar visível em volta. Duas
+   linhas, na ordem em que a pessoa decide: onde, depois quanto. */
 .topbar{
-  height:56px;display:flex;align-items:center;justify-content:space-between;
-  gap:16px;padding:0 16px;background:var(--bg-2);
-  border-bottom:1px solid var(--line);position:relative;z-index:1200;
+  position:absolute;top:12px;left:12px;right:12px;z-index:1200;
+  display:flex;flex-direction:column;gap:8px;
+  padding:10px 16px;background:var(--panel);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
 }
+.topbar-linha{display:flex;align-items:flex-start;gap:16px}
+.topbar-linha-1{align-items:flex-start}
+.topbar-lugares{display:flex;gap:14px;flex:1;min-width:0}
+.topbar-lugares .field-topo{flex:1;min-width:0;margin:0}
+.field-topo label{margin-bottom:4px}
+.field-topo .hint{margin:4px 0 0;font-size:10.5px;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .brand{padding-top:2px}
+.topbar .icon-btn{flex:none;margin-top:2px}
+
+/* ---- segunda linha: o orçamento é o controle principal da tela ----
+   Ele ocupa a largura toda porque é a pergunta que o site responde. A caixa
+   de valor fica à direita, no fim do trajeto do olho sobre a barra, e aceita
+   valores acima do máximo do slider. */
+.topbar-linha-2{align-items:center;gap:18px}
+.seg-moeda{flex:none}
+.orcamento{flex:1;display:flex;flex-direction:column;gap:3px;min-width:180px}
+.orcamento-rotulo{
+  font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--txt-dim);text-align:center;
+}
+/* ---- o slider é o controle principal da tela, e tem que parecer ----
+   Trilho de 10 px, parte preenchida na cor da marca e polegar de 26 px: em
+   4 px de altura ele lia como uma linha divisória, não como algo para pegar.
+   `--pct` é escrito pelo JS a cada movimento — sem isso não há como pintar só
+   o trecho à esquerda do polegar num input nativo. */
+.orcamento input[type=range]{
+  width:100%;margin:0;height:10px;border-radius:6px;
+  background:linear-gradient(to right,
+    var(--accent) 0 var(--pct,20%), var(--line) var(--pct,20%) 100%);
+}
+.orcamento input[type=range]::-webkit-slider-thumb{
+  width:26px;height:26px;border:3px solid #fff;
+  background:var(--accent);
+  box-shadow:0 2px 8px rgba(23,43,77,.3), 0 0 0 1px var(--accent);
+}
+.orcamento input[type=range]::-moz-range-thumb{
+  width:20px;height:20px;border:3px solid #fff;background:var(--accent);
+  box-shadow:0 2px 8px rgba(23,43,77,.3);
+}
+.orcamento input[type=range]:focus-visible{outline-offset:4px}
+/* Acima do teto da barra, o polegar fica no fim e perde a cor: o número no
+   campo é que manda, e pintar o trilho inteiro sugeriria o contrário. */
+.orcamento input[type=range].is-beyond{
+  background:linear-gradient(to right, var(--txt-faint) 0 100%);
+}
+.orcamento-valor{flex:none;display:flex;flex-direction:column;gap:2px;width:168px}
+.orcamento-valor .money{margin:0}
+.orcamento-valor .money input{padding-top:6px;padding-bottom:6px;font-size:18px}
+.orcamento-valor .hint{margin:0;font-size:10px;text-align:right;line-height:1.3}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand-mark{
   width:30px;height:30px;display:grid;place-items:center;border-radius:9px;
@@ -118,17 +188,26 @@ button,input,select{font:inherit;color:inherit}
 .seg-btn.is-active{background:var(--accent);color:var(--accent-ink)}
 
 /* ------------------------------------------------------- layout ----- */
+/* O mapa ocupa tudo; a barra superior e a lateral pairam sobre ele. Só a
+   barra de detalhes continua ancorada, porque cresce e empurraria o mapa. */
 .layout{
-  height:calc(100% - 56px);
+  height:100%;
   display:grid;
-  grid-template-columns:var(--sidebar-w) 1fr;
   grid-template-rows:1fr auto;
-  grid-template-areas:"side map" "side details";
+  grid-template-areas:"map" "details";
+  position:relative;
 }
 
 /* ------------------------------------------------------ lateral ----- */
+/* --topbar-h é medido em tempo real pelo JS: a barra muda de altura quando
+   as dicas embrulham, e uma margem fixa aqui ora sobrava, ora encavalava. */
 .sidebar{
-  grid-area:side;background:var(--bg-2);border-right:1px solid var(--line);
+  position:absolute;z-index:900;
+  left:12px;top:calc(var(--topbar-h, 118px) + 24px);
+  width:var(--sidebar-w);
+  max-height:calc(100% - var(--topbar-h, 118px) - 36px);
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
 }
 .sidebar::-webkit-scrollbar,.results-list::-webkit-scrollbar,.details-body::-webkit-scrollbar{width:9px}
@@ -198,7 +277,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   position:absolute;z-index:800;background:var(--overlay);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
 }
-.map-stats{top:12px;left:12px;display:flex;gap:2px;padding:8px 4px}
+/* Os três avisos do mapa partem do mesmo canto: logo abaixo da barra
+   superior e à direita da lateral, que agora flutuam sobre o mapa. */
+.map-stats{top:var(--mapa-topo);left:var(--mapa-esq);display:flex;gap:2px;padding:8px 4px}
 .map-stats > div{display:flex;flex-direction:column;align-items:center;padding:0 12px;line-height:1.15}
 .map-stats > div + div{border-left:1px solid var(--line)}
 .map-stats b{font-size:17px;font-weight:700}
@@ -242,7 +323,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .pin:hover{transform:translate(-50%,-50%) scale(1.09);z-index:999!important}
 
 /* destino com preço real de voo */
-.pin-star{font-style:normal;font-size:10px;line-height:1;color:var(--gold)}
+.pin-star{font-style:normal;font-size:11px;line-height:1;color:var(--gold-pino)}
 .pin.pin-real{
   box-shadow:0 0 0 2px var(--gold-solid), 0 3px 12px rgba(0,0,0,.55);
   border-color:rgba(0,0,0,.45);
@@ -253,9 +334,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 .tip-real{color:var(--gold);font-size:11px}
 .tip-est{color:var(--txt-faint);font-size:11px}
-.pin-fit{background:var(--fit);color:var(--fit-ink)}
-.pin-tight{background:var(--tight);color:var(--gold-ink)}
-.pin-over{background:var(--over-bg);color:var(--over-ink);border-color:var(--over-line);font-weight:600}
+.pin-fit{background:var(--fit-pino);color:#fff}
+.pin-tight{background:var(--tight-pino);color:#fff}
+/* "Acima do orçamento" continua discreto de propósito — é o que a pessoa
+   descarta —, mas agora lê: era texto apagado sobre rosa quase branco. */
+.pin-over{background:#fff;color:var(--over-pino);border-color:var(--over-line);font-weight:650}
 .pin-origin{background:var(--origin);color:var(--origin-ink)}
 .pin.is-selected{box-shadow:0 0 0 3px rgba(255,255,255,.85),0 3px 12px rgba(0,0,0,.6);z-index:1000!important}
 
@@ -368,12 +451,27 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 @media (max-width:880px){
   body{overflow:auto}
+  /* Em tela estreita não cabe nada flutuando: a barra e a lateral voltam a ser
+     blocos empilhados e o mapa fica entre eles. */
+  .topbar{position:static;border-radius:0;border-width:0 0 1px;box-shadow:none;
+    margin:0;padding:10px 14px}
+  .topbar-linha-1{flex-wrap:wrap}
+  .topbar-lugares{flex-basis:100%;flex-wrap:wrap}
+  .topbar-lugares .field-topo{flex-basis:100%}
+  .topbar-linha-2{flex-wrap:wrap}
+  .orcamento-valor{width:100%}
+  .orcamento-valor .hint{text-align:left}
   .layout{
     grid-template-columns:1fr;grid-template-rows:auto 58vh auto;
     grid-template-areas:"side" "map" "details";height:auto;
   }
-  .sidebar{border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  .sidebar{
+    position:static;width:auto;max-height:none;border-radius:0;
+    border-width:0 0 1px;box-shadow:none;overflow:visible;
+  }
   .map-wrap{min-height:58vh}
+  /* sem lateral flutuante, os avisos voltam para o canto do mapa */
+  :root{--mapa-esq:12px;--mapa-topo:12px}
   .details[data-state=open] .details-body{height:auto;max-height:none}
   .dgrid{grid-template-columns:1fr}
   .brand-text small{display:none}
@@ -395,9 +493,12 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 
 /* marcador discreto para destinos fora do orçamento */
+/* #4a3038 era um vinho escuro herdado do tema escuro: sobre mapa claro virava
+   uma sujeira difícil de ler como "destino". Ponto branco com aro vermelho lê
+   como marcador desligado — visível, mas sem competir com os preços. */
 .pin.pin-dot{
-  width:9px;height:9px;padding:0;border-radius:50%;background:#4a3038;
-  border:1.5px solid rgba(239,95,107,.55);box-shadow:none;
+  width:10px;height:10px;padding:0;border-radius:50%;background:#fff;
+  border:2px solid var(--over-pino);box-shadow:0 1px 3px rgba(23,43,77,.3);
 }
 .pin.pin-dot:hover{background:var(--over)}
 
@@ -431,7 +532,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 /* caixa de status no mapa */
 .map-fare{
-  top:12px;left:12px;margin-top:58px;display:flex;align-items:center;gap:8px;
+  top:var(--mapa-topo);left:var(--mapa-esq);margin-top:58px;
+  display:flex;align-items:center;gap:8px;
   padding:7px 11px;font-size:11.5px;color:var(--txt-dim);max-width:260px;
 }
 .map-fare b{color:var(--origin);font-size:15px;font-weight:750}
@@ -603,7 +705,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 
 /* ================= botão dourado: só preço confirmado ================== */
 .map-gold{
-  position:absolute;z-index:800;top:12px;left:12px;margin-top:104px;
+  position:absolute;z-index:800;top:var(--mapa-topo);left:var(--mapa-esq);margin-top:104px;
   display:flex;align-items:center;gap:7px;
   padding:8px 13px;border-radius:20px;cursor:pointer;
   background:var(--overlay);backdrop-filter:blur(8px);
@@ -646,7 +748,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 
 /* dois botões de filtro no mapa */
 .map-filtros{
-  position:absolute;z-index:800;top:12px;left:12px;margin-top:104px;
+  position:absolute;z-index:800;top:var(--mapa-topo);left:var(--mapa-esq);margin-top:104px;
   display:flex;flex-direction:column;gap:7px;align-items:flex-start;
 }
 .map-filtros .map-gold{position:static;margin:0}
@@ -747,9 +849,12 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .caminho:hover{background:rgba(255,255,255,.02);border-radius:8px}
 .tag-escala{background:var(--origin)!important;color:var(--origin-ink)!important}
 .caminho[data-caminho=escala] .conexao-head b{color:var(--origin)}
+/* 9 px em maiúsculas é texto pequeno: o verde da marca sobre a pastilha verde
+   dava 4,05:1, abaixo do mínimo. Um tom mais escuro só para este selo resolve
+   sem mexer na cor da marca em todo o resto. */
 .selo-barato{
   font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
-  background:var(--accent-chip);color:var(--accent);padding:2px 7px;border-radius:10px;
+  background:var(--accent-chip);color:#065c43;padding:2px 7px;border-radius:10px;
 }
 .ver-destino{
   display:inline-block;margin-top:4px;border:0;background:none;cursor:pointer;
@@ -870,7 +975,10 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 }
 /* As pílulas do mapa ficam sobre fotos de terreno de todos os tons: a borda
    clara garante que o recorte apareça tanto sobre mar quanto sobre cidade. */
-.pin{border-color:#ffffffd9;box-shadow:0 2px 8px rgba(23,43,77,.28)}
+/* Contorno branco: separa a pílula escura do mapa claro por baixo, seja mar,
+   cidade ou montanha, sem depender da cor do tile. */
+.pin{border-color:#ffffffe6;box-shadow:0 2px 9px rgba(23,43,77,.3)}
+.pin-over{border-color:var(--over-line)}
 .pin.pin-real{box-shadow:0 0 0 2px var(--gold-solid), 0 2px 9px rgba(23,43,77,.3)}
 .leaflet-control-attribution{background:#ffffffc4!important}
 

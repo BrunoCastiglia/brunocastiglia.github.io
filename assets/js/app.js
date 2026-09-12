@@ -1705,6 +1705,37 @@ function setupDestino() {
   $('#btnLimparDestino').addEventListener('click', limparDestino);
 }
 
+/**
+ * Pinta o trecho do trilho à esquerda do polegar.
+ *
+ * Um `input[type=range]` nativo não sabe fazer isso: o navegador desenha o
+ * trilho inteiro de uma cor só. O jeito é um gradiente cujo ponto de virada
+ * acompanha o valor — daí a porcentagem precisar vir do JS a cada movimento.
+ */
+function pintarTrilho(range) {
+  const min = +range.min, max = +range.max;
+  const pct = max > min ? ((+range.value - min) / (max - min)) * 100 : 0;
+  range.style.setProperty('--pct', pct.toFixed(1) + '%');
+}
+
+/**
+ * Mantém `--topbar-h` igual à altura real da barra superior.
+ *
+ * A lateral e os avisos do mapa se posicionam a partir dela, e ela muda de
+ * altura sozinha: a dica embaixo da origem passa de "digite 3 letras" para
+ * "Itália · detectado pelo IP", os campos embrulham em telas estreitas. Com um
+ * valor fixo no CSS, ora sobrava um vão, ora a lateral entrava por baixo.
+ */
+function acompanharAlturaDoTopo() {
+  const topo = document.querySelector('.topbar');
+  if (!topo) return;
+  const medir = () =>
+    document.documentElement.style.setProperty('--topbar-h', topo.offsetHeight + 'px');
+  medir();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(medir).observe(topo);
+  else window.addEventListener('resize', medir);
+}
+
 /* ------------------------------------------------------------- datas ---- */
 /**
  * Os dois jeitos de dizer quando a viagem é.
@@ -1803,6 +1834,8 @@ function setupQuando() {
 
 /* --------------------------------------------------------- formulário -- */
 function setupForm() {
+  acompanharAlturaDoTopo();
+  pintarTrilho($('#budgetRange'));
   setupQuando();
 
   // orçamento (campo + slider sincronizados)
@@ -1813,6 +1846,7 @@ function setupForm() {
     if (from !== 'input') budget.value = state.budget;
     if (from !== 'range') range.value = Math.min(+range.max, Math.max(+range.min, state.budget));
     range.classList.toggle('is-beyond', state.budget > +range.max);
+    pintarTrilho(range);
   };
   budget.addEventListener('input', () => { syncBudget(+budget.value || 0, 'input'); debouncedSearch(); });
   range.addEventListener('input', () => { syncBudget(+range.value, 'range'); debouncedSearch(); });
@@ -1843,6 +1877,7 @@ function setupForm() {
     range.min = Math.round(FX.fromEUR(50, next) / 25) * 25;
     range.step = next === 'BRL' ? 50 : 25;
     range.value = Math.min(+range.max, state.budget);
+    pintarTrilho(range);
     $('#rangeMaxLabel').textContent = FX.money(1000, next);
     search({ refit:false });
   }));

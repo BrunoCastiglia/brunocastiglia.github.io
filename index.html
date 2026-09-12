@@ -14,7 +14,7 @@
 
 <link rel="preconnect" href="https://basemaps.cartocdn.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="assets/css/style.css?v=10">
+<link rel="stylesheet" href="assets/css/style.css?v=15">
 
 <!-- ===== ANÚNCIOS =====
      Quando sua conta do Google AdSense for aprovada, descomente a linha abaixo
@@ -25,32 +25,23 @@
 </head>
 <body>
 
+<!-- ============ BARRA SUPERIOR ============
+     Primeiro passo: de onde, para onde e — em destaque — quanto se tem.
+     O orçamento é o que o site responde, então ganha a linha inteira e o
+     maior controle da tela. Data, viajantes e o resto vêm depois, na lateral. -->
 <header class="topbar">
-  <div class="brand">
-    <span class="brand-mark" aria-hidden="true">◎</span>
-    <div class="brand-text">
-      <strong>MoneyToGo</strong>
-      <small>para onde seu dinheiro te leva — voo e hospedagem no mapa</small>
+
+  <div class="topbar-linha topbar-linha-1">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◎</span>
+      <div class="brand-text">
+        <strong>MoneyToGo</strong>
+        <small>para onde seu dinheiro te leva</small>
+      </div>
     </div>
-  </div>
 
-  <div class="topbar-actions">
-    <div class="seg" role="group" aria-label="Moeda">
-      <button type="button" class="seg-btn is-active" data-currency="EUR">€ EUR</button>
-      <button type="button" class="seg-btn" data-currency="USD">$ USD</button>
-      <button type="button" class="seg-btn" data-currency="BRL">R$ BRL</button>
-    </div>
-    <button type="button" class="icon-btn" id="btnHelp" aria-label="Como funciona">?</button>
-  </div>
-</header>
-
-<div class="layout">
-
-  <!-- ============ BARRA LATERAL ESQUERDA ============ -->
-  <aside class="sidebar" id="sidebar">
-    <form class="panel" id="tripForm" autocomplete="off">
-
-      <div class="field">
+    <div class="topbar-lugares">
+      <div class="field field-topo">
         <label for="origin">De onde você sai?</label>
         <div class="combo">
           <input type="text" id="origin" name="origin" placeholder="Ex.: Lisboa, São Paulo, Berlim…" required>
@@ -61,7 +52,7 @@
         <p class="hint" id="originHint">Digite pelo menos 3 letras.</p>
       </div>
 
-      <div class="field">
+      <div class="field field-topo">
         <label for="destino">Para onde quer ir? <i class="opcional">opcional</i></label>
         <div class="combo">
           <input type="text" id="destino" name="destino" placeholder="Deixe vazio para ver tudo no mapa">
@@ -71,16 +62,40 @@
         </div>
         <p class="hint" id="destinoHint">Se não houver voo até lá, buscamos o ponto mais próximo que dá para alcançar.</p>
       </div>
+    </div>
 
-      <div class="field">
-        <label for="budget">Quanto você tem no total?</label>
-        <div class="money">
-          <span class="money-symbol" id="curSymbol">€</span>
-          <input type="number" id="budget" name="budget" min="20" step="25" value="200" required>
-        </div>
-        <input type="range" id="budgetRange" min="50" max="1000" step="25" value="200" aria-label="Orçamento">
-        <p class="hint">A barra vai até <b id="rangeMaxLabel">€ 1.000</b> — acima disso, digite o valor no campo.</p>
+    <button type="button" class="icon-btn" id="btnHelp" aria-label="Como funciona">?</button>
+  </div>
+
+  <div class="topbar-linha topbar-linha-2">
+    <div class="seg seg-moeda" role="group" aria-label="Moeda">
+      <button type="button" class="seg-btn is-active" data-currency="EUR">€ EUR</button>
+      <button type="button" class="seg-btn" data-currency="USD">$ USD</button>
+      <button type="button" class="seg-btn" data-currency="BRL">R$ BRL</button>
+    </div>
+
+    <div class="orcamento">
+      <label for="budgetRange" class="orcamento-rotulo">Quanto você tem para viajar?</label>
+      <input type="range" id="budgetRange" min="50" max="1000" step="25" value="200"
+             aria-label="Orçamento">
+    </div>
+
+    <div class="orcamento-valor">
+      <div class="money">
+        <span class="money-symbol" id="curSymbol">€</span>
+        <input type="number" id="budget" name="budget" min="20" step="25" value="200" required>
       </div>
+      <p class="hint">a barra vai até <b id="rangeMaxLabel">€ 1.000</b> · digite para mais</p>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ============ BARRA LATERAL ESQUERDA ============
+       Segundo passo: quando, com quantos, e o que entra na conta. -->
+  <aside class="sidebar" id="sidebar">
+    <form class="panel" id="tripForm" autocomplete="off">
 
       <div class="field">
         <label>Quando você viaja?</label>
@@ -143,7 +158,6 @@
         </div>
         <p class="hint" id="styleHint">Hostel ou quarto compartilhado; voo low cost, só bagagem de mão.</p>
       </div>
-
     </form>
 
     <!-- Slot de anúncio (lateral) -->
@@ -235,6 +249,6 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script type="module" src="assets/js/app.js?v=10"></script>
+<script type="module" src="assets/js/app.js?v=15"></script>
 </body>
 </html>
