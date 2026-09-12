@@ -45,8 +45,60 @@ const detalhesDoTrecho = l => {
 
 const CACHE_AIRPORTS = 'ppi.ryanair.airports.v1';
 const CACHE_FARES    = 'ppi.ryanair.fares.v1.';
-const TTL_AIRPORTS   = 7 * 24 * 3600e3;   // 7 dias
-const TTL_FARES      = 6 * 3600e3;        // 6 horas
+const TTL_AIRPORTS   = 30 * 24 * 3600e3;  // 30 dias — a malha muda por temporada
+const TTL_FARES      = 12 * 3600e3;       // 12 horas — tarifa não muda de hora em hora
+
+/* ---------------------------------------------------- fila de pedidos --- */
+/*
+   Procurar caminhos dispara muitas consultas: cada hub candidato tem duas
+   pernas, cada perna tenta três janelas de horário, e isso se repete para a
+   volta. Sem controle, uma única busca passava de cem requisições e a API
+   começava a recusar — respondendo sem os cabeçalhos de CORS, o que aparece no
+   console como erro de origem, não como bloqueio por volume.
+
+   Aqui tudo passa por uma fila: no máximo 3 ao mesmo tempo, com um respiro
+   entre disparos. Fica mais lento, e é o preço de continuar sendo atendido.
+*/
+const LIMITE_SIMULTANEO = 2;
+const RESPIRO_MS = 250;
+
+/* Quando a API começa a recusar (403/429), ela responde sem os cabeçalhos de
+   CORS e o navegador reporta erro de origem — parece outra coisa. Ao detectar,
+   paramos de pedir por alguns minutos em vez de insistir e piorar. */
+let bloqueadoAte = 0;
+export const estaBloqueado = () => Date.now() < bloqueadoAte;
+function marcarBloqueio() {
+  bloqueadoAte = Date.now() + 5 * 60e3;
+  espera.length = 0;                     // descarta o que estava na fila
+}
+let emVoo = 0;
+const espera = [];
+
+function liberarVaga() {
+  emVoo--;
+  const proximo = espera.shift();
+  if (proximo) setTimeout(proximo, RESPIRO_MS);
+}
+
+/** fetch com fila: mesma assinatura, com limite de simultaneidade. */
+function pedir(url, opts) {
+  if (estaBloqueado()) return Promise.reject(new Error('em pausa'));
+
+  return new Promise((resolve, reject) => {
+    const disparar = () => {
+      emVoo++;
+      fetch(url, opts)
+        .then(res => {
+          if (res.status === 403 || res.status === 429) marcarBloqueio();
+          resolve(res);
+        })
+        .catch(err => { marcarBloqueio(); reject(err); })
+        .finally(liberarVaga);
+    };
+    if (emVoo < LIMITE_SIMULTANEO) disparar();
+    else espera.push(disparar);
+  });
+}
 
 /* --------------------------------------------------------------- cache --- */
 function readCache(key, ttl) {
@@ -71,7 +123,7 @@ export function loadAirports() {
   const cached = readCache(CACHE_AIRPORTS, TTL_AIRPORTS);
   if (cached) { airportsPromise = Promise.resolve(cached); return airportsPromise; }
 
-  airportsPromise = fetch(AIRPORTS_URL)
+  airportsPromise = pedir(AIRPORTS_URL)
     .then(r => r.ok ? r.json() : Promise.reject(new Error('airports ' + r.status)))
     .then(rows => {
       const list = rows
@@ -183,7 +235,7 @@ export async function fetchFares(originIata, month, days, signal, country = null
 
   let rows;
   try {
-    const res = await fetch(`${FARES_URL}?${qs}`, { signal });
+    const res = await pedir(`${FARES_URL}?${qs}`, { signal });
     if (!res.ok) throw new Error('fares ' + res.status);
     rows = (await res.json()).fares || [];
   } catch { return new Map(); }
@@ -315,7 +367,7 @@ export function bookingUrl(fare, people = 1) {
 
 const ROUTES_URL = 'https://www.ryanair.com/api/views/locate/searchWidget/routes/en/airport/';
 const CACHE_ROUTES = 'ppi.ryanair.routes.v1.';
-const TTL_ROUTES = 7 * 24 * 3600e3;
+const TTL_ROUTES = 30 * 24 * 3600e3;      // rotas mudam por temporada, não por dia
 
 /** Destinos que a Ryanair serve a partir de um aeroporto. Cache de 7 dias. */
 export async function routesFrom(iata, signal) {
@@ -324,7 +376,7 @@ export async function routesFrom(iata, signal) {
   if (cached) return cached;
 
   try {
-    const res = await fetch(ROUTES_URL + iata, { signal });
+    const res = await pedir(ROUTES_URL + iata, { signal });
     if (!res.ok) throw new Error('routes ' + res.status);
     const rows = await res.json();
     const list = rows
@@ -372,7 +424,7 @@ export async function legFare(from, to, month, days, signal, depoisDe = null, an
   });
 
   try {
-    const res = await fetch(`https://services-api.ryanair.com/farfnd/v4/oneWayFares?${qs}`, { signal });
+    const res = await pedir(`https://services-api.ryanair.com/farfnd/v4/oneWayFares?${qs}`, { signal });
     if (!res.ok) throw new Error('leg ' + res.status);
     const fares = (await res.json()).fares || [];
     let melhor = null;
@@ -427,7 +479,7 @@ export async function findConnection(origin, dest, airports, month, days, signal
     })
     .filter(Boolean)
     .sort((a, b) => a.desvio - b.desvio)
-    .slice(0, 3);
+    .slice(0, 1);          // só o hub de menor desvio
 
   if (!candidatos.length) return null;
 
@@ -446,11 +498,12 @@ export async function findConnection(origin, dest, airports, month, days, signal
      lugar não quer dormir dois dias num aeroporto pelo caminho. Se nada couber
      em 28 h, o trajeto é descartado e o site procura outra forma de chegar
      (aeroporto vizinho, ou voo até perto e o resto por terra). */
-  const JANELAS = [
-    { ateH: 6,  tipo:'curta'    },   // troca de avião na mesma tarde
-    { ateH: 12, tipo:'mesmo-dia'},   // ainda no mesmo dia
-    { ateH: 28, tipo:'pernoite' },   // uma noite na cidade da escala
-  ];
+  // Duas janelas em vez de três: cada uma é uma consulta a mais por perna, e
+  // 12 h já cobre a conexão confortável no mesmo dia.
+  // Uma janela só. Cada janela extra é outra consulta por perna, multiplicada
+  // por candidatos, ida e volta — foi assim que uma busca passou de cem
+  // requisições e a companhia começou a recusar.
+  const JANELAS = [{ ateH: 28, tipo:'pernoite' }];
 
   const somaHoras = (iso, h) =>
     new Date(new Date(iso).getTime() + h * 3600e3).toISOString().slice(0, 19);
@@ -542,9 +595,12 @@ export async function reachableWithStop(originIata, signal, aoProgredir) {
   const diretos = await routesFrom(originIata, signal);
   if (signal?.aborted || !diretos.length) return new Map();
 
+  // 8 hubs em vez de 14: são as bases da companhia, as mais conectadas, e o
+  // ganho de alcance das últimas seis não compensava seis consultas a mais por
+  // aeroporto de saída.
   const hubs = [...diretos]
     .sort((a, b) => (b.base === true) - (a.base === true))
-    .slice(0, 14);
+    .slice(0, 8);
 
   const alcance = new Map();
   const diretosSet = new Set(diretos.map(d => d.iata));
@@ -619,7 +675,7 @@ export async function directFromNearbyAirport(
     const rotas = await routesFrom(c.iata, signal);
     if (signal?.aborted) return null;
     if (rotas.some(r => r.iata === destApt.iata)) comRota.push(c);
-    if (comRota.length >= 3) break;             // basta comparar os 3 mais perto
+    if (comRota.length >= 2) break;             // basta comparar os 2 mais perto
   }
   if (!comRota.length) return null;
 

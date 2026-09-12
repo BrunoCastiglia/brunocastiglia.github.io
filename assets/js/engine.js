@@ -176,11 +176,15 @@ export function dentroDaArea(b, d) {
  * @param {object} opts  além dos de tripCost: { tags:[], maxHours:number|null }
  */
 export function rankDestinations(origin, destinations, opts) {
-  const { tags = [], maxHours = null, bounds = null, filtro = 'todos' } = opts;
+  const { tags = [], maxHours = null, bounds = null, filtro = 'todos', manterId = null } = opts;
   const out = [];
 
   for (const d of destinations) {
-    if (bounds && !dentroDaArea(bounds, d)) continue;               // fora do mapa visível
+    // O destino aberto continua na lista mesmo saindo do enquadramento: ao
+    // clicar em Amsterdã o mapa se move, ela saía da área e o painel perdia o
+    // trajeto no meio do caminho. Sai só quando a pessoa escolhe outro.
+    const fixo = manterId && d.id === manterId;
+    if (bounds && !fixo && !dentroDaArea(bounds, d)) continue;      // fora do mapa visível
     if (distanceKm(origin, d) < 80) continue;                       // é a própria cidade
     if (tags.length && !tags.every(t => d.tags.includes(t))) continue;
     const r = tripCost(origin, d, opts);

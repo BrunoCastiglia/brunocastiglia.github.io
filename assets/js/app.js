@@ -47,6 +47,7 @@ const state = {
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
   destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
   caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
+  caminhosPorDestino: new Map(),   // resultado da busca de caminhos, por destino
   intro: true,            // primeira abertura: anima do mundo até a origem
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
@@ -156,7 +157,34 @@ function desenharRotaFixa({ animar = false } = {}) {
 function fixarCaminho(destId, pontos) {
   state.caminho = { destId, pontos };
   desenharCaminho(pontos);
+  enquadrarTrajeto(pontos);
 }
+
+/**
+ * Ajusta o mapa para o trajeto inteiro caber na tela.
+ *
+ * Sem isso, clicar num destino distante deixava metade do caminho fora do
+ * enquadramento — e como a barra inferior se abre ao mesmo tempo, o destino
+ * ainda podia ficar escondido atrás dela.
+ */
+function enquadrarTrajeto(pontos) {
+  if (!map || !pontos || pontos.length < 2) return;
+  const validos = pontos.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if (validos.length < 2) return;
+
+  clearTimeout(enquadreTimer);
+  enquadreTimer = setTimeout(() => {
+    const limites = L.latLngBounds(validos.map(p => [p.lat, p.lon]));
+    map.fitBounds(limites, {
+      paddingTopLeft: [60, 60],
+      paddingBottomRight: [60, 40],
+      maxZoom: 7,
+      animate: true,
+      duration: 0.6,
+    });
+  }, 120);   // espera a barra inferior terminar de abrir
+}
+let enquadreTimer;
 
 /**
  * Desenha um trajeto passando por todas as paradas informadas.
@@ -349,6 +377,7 @@ function search({ refit = true } = {}) {
       mode: state.mode, budgetEUR: budgetEUR(), tags: state.tags,
       maxHours: state.maxHours, sortBy: state.sortBy, realFares: state.realFares,
       filtro: state.filtro, viaEscala: state.viaEscala, bounds: areaVisivel(),
+      manterId: state.selected,
     });
 
     renderStats();
@@ -376,6 +405,7 @@ const PAIS_ISO = Object.fromEntries(DESTINATIONS.map(d => [d.cc, true]));
  */
 async function loadRealFares() {
   if (!state.origin) return;
+  if (RYA.estaBloqueado()) return setFareStatus('pausa');
   faresAbort?.abort();
   faresAbort = new AbortController();
   const signal = faresAbort.signal;
@@ -450,7 +480,7 @@ async function loadRealFares() {
 
     // Rede de escalas das três saídas, para o filtro do mapa.
     const alcanceTotal = new Map();
-    for (const saida of saidas.slice(0, 3)) {
+    for (const saida of saidas.slice(0, 2)) {
       const alcance = await RYA.reachableWithStop(saida.iata, signal, parcial => {
         for (const [k, v] of parcial) if (!alcanceTotal.has(k)) alcanceTotal.set(k, { hub:v, saida });
         if (!signal.aborted) casarEscalas(alcanceTotal, airports);
@@ -510,6 +540,7 @@ function setFareStatus(kind) {
 
   const texts = {
     loading:   ['…', 'buscando preços reais de voo'],
+    pausa:     ['', 'muitas consultas seguidas — pausando alguns minutos'],
     ok:        [String(n), `preços reais${saidas ? ' de ' + saidas : ''}`],
     uncovered: ['', 'sem voos Ryanair perto da sua origem — voos estimados'],
     none:      ['', 'preços reais indisponíveis agora — voos estimados'],
@@ -566,11 +597,9 @@ function select(id, { fly = false } = {}) {
   const r = state.results.find(x => x.dest.id === id);
   paintSelection();
   if (!r) return;
-  if (fly) {
-    state.ignorarMove = true;
-    map.panTo([r.dest.lat, r.dest.lon], { duration:.6 });
-  }
+  // o enquadramento do trajeto substitui o antigo "voar até o pino"
   renderDetails(r);
+  if (state.origin) enquadrarTrajeto(pontosDoVoo(r));
   $('#details').dataset.state = 'open';
   $('#detailsHandle').setAttribute('aria-expanded', 'true');
   ajustarAlturaAoConteudo();
@@ -586,7 +615,11 @@ const VERDICT = {
   over:  { tag:'acima',     cls:'tag-over' },
 };
 
-function clearDetails() {
+function clearDetails({ forcar = false } = {}) {
+  // Enquanto houver um destino aberto, a barra fica. Buscas em andamento
+  // chegavam com a lista da área anterior e recolhiam o painel logo depois de
+  // ele abrir — uma corrida difícil de reproduzir e fácil de evitar.
+  if (state.selected && !forcar) return;
   state.selected = null;
   $('#detailsTitle').textContent = 'Clique num destino do mapa para ver os voos';
   $('#detailsBody').innerHTML =
@@ -668,6 +701,9 @@ function renderDetails(r) {
       <span class="opt-go opt-go-real">reservar este voo →</span>
     </a>` : '';
 
+  // Com preço confirmado não faz sentido mandar a pessoa pesquisar de novo:
+  // a coluna some e o espaço fica para as opções de caminho.
+  const semBusca = !!r.real && mode.flight && !mode.stay;
   const ctx     = { origin: state.origin };
   // A linha "Estimativa de mercado" saiu: repetia o valor que já está no
   // Resumo e levava ao mesmo Google do botão ao lado, com um destaque verde
@@ -683,7 +719,7 @@ function renderDetails(r) {
   // informação duas vezes na tela.
 
   $('#detailsBody').innerHTML = `
-    <div class="dgrid dgrid-${r.mode}">
+    <div class="dgrid dgrid-${r.mode}${semBusca ? ' dgrid-sem-busca' : ''}">
 
       <section class="dcol">
         <h4>Resumo</h4>
@@ -717,17 +753,17 @@ function renderDetails(r) {
         <p class="osm-stays" id="osmStays" hidden></p>
       </section>` : ''}
 
+      ${semBusca ? '' : `
       <section class="dcol">
         <h4>${mode.flight && !mode.stay ? 'Pesquisar voo' : 'Pesquisar'}</h4>
         <div class="book book-abas" id="abasBusca">
           ${links.map(l => `<a class="aba" href="${l.href}" target="_blank" rel="noopener nofollow">
              <b>${esc(l.label)}</b><span>${esc(l.note)}</span></a>`).join('')}
         </div>
-        <p class="disclaimer">${r.real && mode.flight
-          ? `O voo em destaque é preço real da Ryanair, buscado agora${mode.stay ? '; a hospedagem é estimativa' : ''}.`
-          : `Estimativa de planejamento (distância, temporada de ${MONTHS[state.month].toLowerCase()}${mode.stay ? ' e preço de hospedagem local' : ''}) — não é cotação.`}
-          Comida e passeios não entram nesta conta.</p>
-      </section>
+        <p class="disclaimer">Estimativa de planejamento (distância, temporada de
+          ${MONTHS[state.month].toLowerCase()}${mode.stay ? ' e preço de hospedagem local' : ''})
+          — não é cotação. Comida e passeios não entram nesta conta.</p>
+      </section>`}
     </div>
 
     <div class="ad-strip" aria-hidden="true">
@@ -746,7 +782,12 @@ function renderDetails(r) {
   // o atalho para a pessoa procurar por conta própria.
   realcarBusca(mode.flight && !r.real && !r.useGround);
   if (mode.stay) showOsmStays(r.dest);
-  if (mode.flight && !r.real && !r.useGround) buscarConexao(r);
+
+  // A busca de caminhos alternativos custa dezenas de consultas à companhia.
+  // Fazê-la a cada destino aberto esgotava o limite da API em poucos cliques —
+  // e quem só está passeando pelo mapa nem chega a olhar o resultado. Agora ela
+  // só acontece quando a pessoa pede, e o que já foi procurado fica guardado.
+  if (mode.flight && !r.real && !r.useGround) prepararBuscaDeCaminhos(r);
 }
 
 /**
@@ -818,7 +859,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
     .map(d => ({ d, km: Math.round(distanciaSimples(d, destinoFinal)) }))
     .filter(v => v.km <= maxKm)
     .sort((a, b) => a.km - b.km)
-    .slice(0, 4);
+    .slice(0, 2);        // cada vizinho pode custar várias consultas
 
   // a própria cidade da base entra na disputa: se Santiago tem voo, o ônibus
   // até Pontevedra sai de lá mesmo
@@ -851,12 +892,44 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
         total: direto.price + terra.preco,
       });
     }
-    if (achados.length >= 2) break;          // dois candidatos já bastam
+    if (achados.length >= 1) break;          // um candidato bom já resolve
   }
 
   if (!achados.length) return null;
   achados.sort((a, b) => a.total - b.total);
   return { ...achados[0], destinoFinal };
+}
+
+/**
+ * Mostra o resultado já conhecido ou um botão para procurar.
+ *
+ * Guardar por destino evita refazer a busca quando a pessoa volta a um lugar
+ * que já olhou — o caso mais comum de repetição.
+ */
+function prepararBuscaDeCaminhos(r) {
+  const caixa = $('#conexaoBox');
+  if (!caixa) return;
+
+  const guardado = state.caminhosPorDestino.get(r.dest.id);
+  if (guardado) {
+    caixa.hidden = false;
+    mostrarCaminhos({ ...guardado, r });
+    return;
+  }
+
+  caixa.hidden = false;
+  caixa.classList.remove('conexao-direta', 'duas-opcoes');
+  if (RYA.estaBloqueado()) {
+    caixa.innerHTML = `<span class="conexao-load">muitas consultas seguidas à companhia —
+      aguarde alguns minutos e tente de novo</span>`;
+    return;
+  }
+  caixa.innerHTML = `
+    <button type="button" class="procurar-caminhos" id="btnCaminhos">
+      <b>Não há voo direto até aqui</b>
+      <span>Procurar caminhos: voo + ônibus, ou escala pela malha da companhia</span>
+    </button>`;
+  $('#btnCaminhos').addEventListener('click', () => buscarConexao(r), { once:true });
 }
 
 /* ------------------------------------------- trajeto com escala --------- */
@@ -921,9 +994,11 @@ async function buscarConexao(r) {
   if (signal.aborted || state.selected !== alvo) return;
 
   if (comTerra || comEscala) {
+    state.caminhosPorDestino.set(r.dest.id, { comTerra, comEscala, destApt, apt });
     mostrarCaminhos({ comTerra, comEscala, r, destApt, apt });
     return;
   }
+  state.caminhosPorDestino.set(r.dest.id, { comTerra:null, comEscala:null, destApt, apt });
 
   if (caixa) caixa.hidden = true;   // nenhum caminho encontrado
 }
@@ -935,7 +1010,7 @@ async function buscarConexao(r) {
  */
 async function buscarEscala(r, ordem, destApt, signal) {
   const achadas = [];
-  for (const partida of ordem.slice(0, 2)) {
+  for (const partida of ordem.slice(0, 1)) {     // uma saída basta
     if (partida.iata === destApt.iata) continue;
     const achada = await RYA.findConnection(
       partida, destApt, state.airports, state.month, state.days, signal,
@@ -1045,10 +1120,15 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
 
   const opcoes = [];
 
+  const minutosEntre = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(a)) / 60000) : null;
+
   if (comTerra) {
     // o trecho de ônibus termina onde a pessoa pediu, não na cidade da base
     const fim = comTerra.destinoFinal || r.dest;
+    const voo = comTerra.fare.ida?.minutos || 0;
+    const bus = Math.round(comTerra.km / 70 * 60);
     opcoes.push({
+      duracao: voo + bus + 90,          // +90 min de aeroporto e baldeação
       chave: 'terra',
       tag: `★ voo + ${comTerra.terra.modo}`,
       total: comTerra.total,
@@ -1090,6 +1170,7 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
     paradas.push(c.hub, r.dest);
 
     opcoes.push({
+      duracao: minutosEntre(c.pernas[0]?.depart, c.pernas[1]?.arrive) ?? 9999,
       chave: 'escala',
       tag: '✈ só de avião, com escala',
       total: c.total,
@@ -1112,16 +1193,30 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
 
   if (!opcoes.length) { caixa.hidden = true; return; }
 
-  opcoes.sort((a, b) => a.total - b.total);
-  const maisBarato = opcoes[0].total;
+  // Esquerda: a mais rápida, em dourado. Direita: a mais barata, em verde.
+  // Quando só há uma opção, ela fica sozinha e sem disputa.
+  const maisBarata = [...opcoes].sort((a, b) => a.total - b.total)[0];
+  const maisRapida = [...opcoes].sort((a, b) => a.duracao - b.duracao)[0];
+  opcoes.sort((a, b) => (a === maisRapida ? -1 : 1) - (b === maisRapida ? -1 : 1));
+
+  const selo = o => {
+    if (opcoes.length < 2) return '';
+    if (o === maisRapida && o === maisBarata) return '<span class="selo-duplo">mais rápida e mais barata</span>';
+    if (o === maisRapida) return '<span class="selo-rapido">mais rápida</span>';
+    if (o === maisBarata) return '<span class="selo-barato">mais barata</span>';
+    return '';
+  };
+  const tom = o => (opcoes.length > 1 && o === maisBarata && o !== maisRapida) ? 'verde' : 'ouro';
 
   caixa.classList.add('conexao-direta');
+  caixa.classList.toggle('duas-opcoes', opcoes.length > 1);
   caixa.innerHTML = opcoes.map(o => `
-    <div class="caminho" data-caminho="${o.chave}">
+    <div class="caminho caminho-${tom(o)}" data-caminho="${o.chave}">
       <div class="conexao-head">
-        <span class="conexao-tag ${o.chave === 'terra' ? 'tag-direto' : 'tag-escala'}">${o.tag}</span>
-        <b>${fmt(o.total)}</b><small>${esc(o.resumo)}</small>
-        ${o.total === maisBarato && opcoes.length > 1 ? '<span class="selo-barato">mais barato</span>' : ''}
+        <span class="conexao-tag ${tom(o) === 'verde' ? 'tag-verde' : 'tag-ouro'}">${o.tag}</span>
+        ${selo(o)}
+        <b>${fmt(o.total)}</b>
+        <small>${esc(o.resumo)}${o.duracao < 9999 ? ` · ${fmtDuracao(o.duracao)} de viagem` : ''}</small>
       </div>
       <div class="conexao-bloco">${o.corpo}</div>
       <p class="conexao-nota">${o.nota} ${o.acao}</p>
@@ -1338,14 +1433,27 @@ function definirDestino(lugar) {
        <b>${esc(alvo.city)}</b>, a ${distancia} km.`
     : `Procurando o melhor caminho até <b>${esc(alvo.city)}</b>.`;
 
-  // leva o mapa até lá e abre o destino
+  // Leva o mapa até lá e abre o destino. O `state.selected` é definido ANTES
+  // da busca: assim o filtro por área já sabe que este destino tem de entrar
+  // na lista. Sem isso, a busca rodava com a lista da área anterior, não
+  // encontrava o destino e recolhia a barra logo depois de abri-la.
+  state.selected = alvo.id;
   state.ignorarMove = true;
   map.setView([alvo.lat, alvo.lon], 6, { animate:false });
-  setTimeout(() => { search({ refit:false }); select(alvo.id, { fly:false }); }, 120);
+  setTimeout(() => {
+    search({ refit:false });
+    select(alvo.id, { fly:false });
+    // garante a abertura: a busca acima é assíncrona por dentro e, dependendo
+    // da ordem em que termina, deixava a barra recolhida logo após abri-la
+    $('#details').dataset.state = 'open';
+    $('#detailsHandle').setAttribute('aria-expanded', 'true');
+  }, 120);
 }
 
 function limparDestino() {
   state.destinoAlvo = null;
+  state.caminho = null;
+  clearDetails({ forcar:true });
   $('#destino').value = '';
   $('#btnLimparDestino').hidden = true;
   $('#destinoHint').textContent =

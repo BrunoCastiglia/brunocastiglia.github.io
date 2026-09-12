@@ -705,3 +705,42 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
    some junto e volta ao abrir um destino. Ele continua acessível no "?". */
 .details[data-state=collapsed] .aviso-legal{display:none}
 .details[data-state=collapsed] .details-handle{padding:9px 16px}
+
+/* ====== duas opções lado a lado: rápida (ouro) e barata (verde) ========= */
+.conexao.duas-opcoes{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  background:none;border:0;padding:0;
+}
+.conexao.duas-opcoes .caminho{
+  margin:0;padding:11px 13px;border-radius:10px;border:1px solid var(--line);
+}
+.conexao.duas-opcoes .caminho + .caminho{margin-top:0;border-top:1px solid var(--line);padding-top:11px}
+.caminho-ouro{background:rgba(255,210,74,.07);border-color:rgba(255,210,74,.45)!important}
+.caminho-verde{background:rgba(45,212,167,.07);border-color:rgba(45,212,167,.45)!important}
+.caminho-ouro .conexao-head b{color:#ffd24a}
+.caminho-verde .conexao-head b{color:var(--accent)}
+.tag-ouro{background:#ffd24a!important;color:#3a2c00!important}
+.tag-verde{background:var(--accent)!important;color:var(--accent-ink)!important}
+
+.selo-rapido,.selo-duplo{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  padding:2px 7px;border-radius:10px;
+  background:rgba(255,210,74,.18);color:#ffd24a;
+}
+.selo-duplo{background:linear-gradient(90deg,rgba(255,210,74,.2),rgba(45,212,167,.2));color:var(--txt)}
+
+/* a grade se reorganiza quando a coluna de busca sai */
+.dgrid-sem-busca{grid-template-columns:minmax(220px,.7fr) 1.6fr}
+@media (max-width:1180px){ .conexao.duas-opcoes{grid-template-columns:1fr} }
+
+/* botão que dispara a busca de caminhos (em vez de buscar sozinho) */
+.procurar-caminhos{
+  display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;cursor:pointer;
+  padding:12px 14px;border-radius:10px;color:var(--txt);
+  background:var(--panel);border:1px dashed var(--line);transition:.15s;
+}
+.procurar-caminhos:hover{border-color:var(--accent);background:var(--panel-2)}
+.procurar-caminhos b{font-size:13px;font-weight:650}
+.procurar-caminhos span{font-size:11px;color:var(--txt-faint)}
+.procurar-caminhos:hover span{color:var(--accent)}
+.map-fare[data-kind=pausa]{color:var(--tight);font-style:italic}
