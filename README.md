@@ -969,6 +969,37 @@ sombra por baixo para destacar do mapa. É enfeite: fica numa camada SVG própri
 se mexe. A curvatura acompanha a distância na tela — quanto mais longe, mais
 alto o arco.
 
+## O estado de descanso da barra inferior
+
+Sem destino escolhido a barra não some: fica uma faixa baixa com os anúncios à
+vista e nada mais — o convite "clique num destino" já está na alça.
+
+Isso não é escolha de layout, é consequência de uma regra: **um anúncio montado
+dentro de um elemento `display:none` contaria impressão sem ninguém poder vê-lo,
+e o AdSense proíbe.** Ou os espaços aparecem, ou não podem ser montados. Como a
+barra abria recolhida, os três blocos da faixa nunca chegavam a existir.
+
+O estado de descanso só liga quando há anúncio de verdade: `ads.js` põe a classe
+`com-anuncios` no documento quando `ENABLED` é true, e o CSS depende dela. Sem
+isso o site reservaria 82 px de tela para mostrar caixas vazias a quem visita.
+
+| | Barra | Mapa (em 900 px) |
+|---|---|---|
+| Descanso, sem anúncios | 99 px | 697 px |
+| Descanso, com anúncios | 181 px | 615 px |
+| Destino aberto | 308 px | 488 px |
+
+O aviso legal fica à vista nos dois estados de descanso: é uma linha só e carrega
+o link de privacidade, que o AdSense exige alcançável de qualquer lugar.
+
+> **A armadilha que isso destapou.** A altura da barra superior era medida pelo
+> JS e escrita em `--topbar-h`, e `.layout` valia `calc(100% - var(--topbar-h))`.
+> Bastou essa medida ficar velha — 233 px gravados enquanto a barra media 104 —
+> para o layout inteiro encolher e o mapa perder 129 px sem nada na tela
+> explicando. Agora `body` é uma coluna flex e `.layout` é `flex:1`: o navegador
+> faz a conta sozinho e não há medida para envelhecer. Medido depois: topo +
+> mapa + barra somam exatamente a altura da janela nos três estados.
+
 ## Altura da barra inferior
 
 A barra **abre recolhida**: no primeiro acesso a tela é só o mapa e o

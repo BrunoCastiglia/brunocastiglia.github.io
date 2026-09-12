@@ -79,7 +79,7 @@
      própria (campo + ícone de calendário) e não encolhe abaixo dela. */
   --sidebar-w:286px;
   /* Origem dos avisos sobre o mapa: à direita da lateral flutuante e abaixo da
-     barra superior, cuja altura o JS mede e escreve em --topbar-h. */
+     barra superior. */
   --mapa-esq:12px;
   --mapa-topo:12px;
   --details-h:clamp(92px, 10vh, 132px);
@@ -94,6 +94,7 @@ html,body{height:100%}
 body{
   margin:0;font-family:var(--font);background:var(--bg);color:var(--txt);
   font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden;
+  display:flex;flex-direction:column;
 }
 b,strong{font-weight:650}
 button,input,select{font:inherit;color:inherit}
@@ -196,7 +197,12 @@ button,input,select{font:inherit;color:inherit}
    e a lateral escondia justamente os destinos mais próximos da origem, que são
    os que mais interessam. */
 .layout{
-  height:calc(100% - var(--topbar-h, 104px));
+  /* flex:1 em vez de calc(100% - altura da barra): a altura da barra era
+     medida pelo JS e escrita numa variável, e bastava essa medida ficar velha
+     para o layout inteiro encolher — foi o que aconteceu, com --topbar-h em
+     233 px enquanto a barra media 104, e o mapa perdendo 129 px. Com flex o
+     navegador faz a conta sozinho, sempre certa. */
+  flex:1;min-height:0;
   display:grid;
   grid-template-columns:var(--sidebar-w) 1fr;
   grid-template-rows:1fr auto;
@@ -204,8 +210,7 @@ button,input,select{font:inherit;color:inherit}
 }
 
 /* ------------------------------------------------------ lateral ----- */
-/* --topbar-h é medido em tempo real pelo JS: a barra muda de altura quando
-   as dicas embrulham, e uma margem fixa aqui ora sobrava, ora encavalava. */
+
 .sidebar{
   grid-area:side;background:var(--panel);border-right:1px solid var(--line);
   display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
@@ -347,7 +352,19 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   grid-area:details;background:var(--bg-2);border-top:1px solid var(--line);
   display:flex;flex-direction:column;z-index:1000;
 }
+/* Estado de descanso: sem destino escolhido, a barra não some — fica uma
+   faixa baixa com os anúncios à vista e nada mais.
+   Não é decoração: um anúncio montado dentro de um elemento display:none
+   contaria impressão sem ninguém poder vê-lo, o que o AdSense proíbe. Ou os
+   espaços aparecem, ou não podem ser montados. */
 .details[data-state=collapsed] .details-body{display:none}
+.com-anuncios .details[data-state=collapsed] .details-body{
+  display:block;height:auto;overflow:visible;padding-bottom:10px;
+}
+/* nesse estado só a faixa de anúncios interessa; o convite já está na alça */
+.com-anuncios .details[data-state=collapsed] .details-body > :not(.ad-strip){display:none}
+.com-anuncios .details[data-state=collapsed] .ad-strip{margin:0;padding-top:0;border-top:0}
+.com-anuncios .details[data-state=collapsed] .ad-strip .ad-slot{min-height:72px}
 .details[data-state=open] .details-body{display:block;height:var(--details-h)}
 .details[data-state=open] .details-handle-chevron{transform:rotate(180deg)}
 
@@ -864,7 +881,10 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 
 /* Com a barra recolhida, a tela é só o mapa e o formulário: o aviso longo
    some junto e volta ao abrir um destino. Ele continua acessível no "?". */
-.details[data-state=collapsed] .aviso-legal{display:none}
+/* O aviso continua à vista no descanso: é uma linha só, carrega o disclaimer
+   e o link de privacidade, e o AdSense exige que esse link seja alcançável de
+   qualquer lugar do site. Escondê-lo economizava 31 px e custava a exigência. */
+.details[data-state=collapsed] .aviso-legal{display:block}
 .details[data-state=collapsed] .details-handle{padding:9px 16px}
 
 /* ====== duas opções lado a lado: rápida (ouro) e barata (verde) ========= */
@@ -1134,3 +1154,9 @@ a.perna.is-link{padding:4px 8px}
 /* Link de privacidade no rodapé do aviso legal: exigência do AdSense é que
    ele exista e seja alcançável de qualquer página. */
 .aviso-legal p a{color:var(--accent);font-weight:600}
+
+/* Sem destino escolhido a alça não promete expansão que não existe: some a
+   seta e o cursor deixa de convidar ao clique. */
+.details[data-state=collapsed] .details-handle{cursor:default;padding:9px 16px}
+.details[data-state=collapsed] .details-handle:hover{background:transparent}
+.details[data-state=collapsed] .details-handle-chevron{display:none}

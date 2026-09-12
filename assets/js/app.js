@@ -1926,24 +1926,6 @@ function pintarTrilho(range) {
   range.style.setProperty('--pct', pct.toFixed(1) + '%');
 }
 
-/**
- * Mantém `--topbar-h` igual à altura real da barra superior.
- *
- * A lateral e os avisos do mapa se posicionam a partir dela, e ela muda de
- * altura sozinha: a dica embaixo da origem passa de "digite 3 letras" para
- * "Itália · detectado pelo IP", os campos embrulham em telas estreitas. Com um
- * valor fixo no CSS, ora sobrava um vão, ora a lateral entrava por baixo.
- */
-function acompanharAlturaDoTopo() {
-  const topo = document.querySelector('.topbar');
-  if (!topo) return;
-  const medir = () =>
-    document.documentElement.style.setProperty('--topbar-h', topo.offsetHeight + 'px');
-  medir();
-  if (typeof ResizeObserver === 'function') new ResizeObserver(medir).observe(topo);
-  else window.addEventListener('resize', medir);
-}
-
 /* ------------------------------------------------------------- datas ---- */
 /**
  * Os dois jeitos de dizer quando a viagem é.
@@ -2042,7 +2024,6 @@ function setupQuando() {
 
 /* --------------------------------------------------------- formulário -- */
 function setupForm() {
-  acompanharAlturaDoTopo();
   pintarTrilho($('#budgetRange'));
   setupQuando();
 
@@ -2124,6 +2105,11 @@ function setupForm() {
   $('#detailsHandle').addEventListener('click', () => {
     const d = $('#details');
     const open = d.dataset.state === 'open';
+
+    // No estado de descanso não há o que expandir: a barra já mostra tudo o
+    // que existe sem destino escolhido. Quem abre a barra é o clique num
+    // destino do mapa, e a alça diz exatamente isso.
+    if (!open && !state.selected) return;
 
     // Recolher a barra com um destino aberto é a mesma intenção de limpar: a
     // pessoa quer o mapa de volta. Deixar a seleção de pé mantinha o arco e os
