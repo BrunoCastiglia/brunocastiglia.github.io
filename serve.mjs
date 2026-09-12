@@ -16,7 +16,12 @@ createServer(async (req, res) => {
   const rel = normalize(url === '/' ? '/index.html' : url).replace(/^(\.\.[/\\])+/, '');
   try {
     const body = await readFile(join(ROOT, rel));
-    res.writeHead(200, { 'Content-Type': TYPES[extname(rel)] || 'application/octet-stream', 'Cache-Control':'no-cache' });
+    // 'no-store' e não 'no-cache': sem ETag, o navegador segurava a versão
+    // antiga dos módulos ES e o site rodava código já corrigido no disco.
+    res.writeHead(200, {
+      'Content-Type': TYPES[extname(rel)] || 'application/octet-stream',
+      'Cache-Control': 'no-store, must-revalidate',
+    });
     res.end(body);
   } catch {
     res.writeHead(404, { 'Content-Type':'text/plain; charset=utf-8' });

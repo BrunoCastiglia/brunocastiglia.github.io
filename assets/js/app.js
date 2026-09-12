@@ -782,6 +782,23 @@ function realcarBusca(ligado) {
 }
 
 /**
+ * O ponto que a pessoa realmente quer alcançar.
+ *
+ * Quando ela pediu Pontevedra e o site escolheu Santiago de Compostela por ser
+ * o destino conhecido mais próximo, o ônibus tem de terminar em Pontevedra —
+ * não em Santiago. O voo continua sendo escolhido pela cidade da base; só o
+ * último trecho muda de alvo.
+ */
+function alvoFinal(r) {
+  const a = state.destinoAlvo;
+  if (a && a.id === r.dest.id && a.pedido && a.kmDoPedido > 5
+      && Number.isFinite(a.pedidoLat)) {
+    return { city: a.pedido, lat: a.pedidoLat, lon: a.pedidoLon };
+  }
+  return r.dest;
+}
+
+/**
  * Voo até uma cidade vizinha do destino + o último trecho por terra.
  *
  * É o caminho que as pessoas realmente fazem: para Santiago de Compostela sem
@@ -792,14 +809,22 @@ function realcarBusca(ligado) {
  * @returns {Promise<null|{dest, km, fare, terra, total, saida}>}
  */
 async function vooMaisTerra(r, signal, maxKm = 350) {
+  const destinoFinal = alvoFinal(r);
+
   const vizinhos = DESTINATIONS
     .filter(d => d.id !== r.dest.id)
-    // o trecho final é de ônibus: as duas cidades têm de estar na mesma terra
-    .filter(d => ligadosPorTerra(d, r.dest))
-    .map(d => ({ d, km: Math.round(distanciaSimples(d, r.dest)) }))
+    // o trecho final é de ônibus: as duas pontas têm de estar na mesma terra
+    .filter(d => ligadosPorTerra(d, destinoFinal))
+    .map(d => ({ d, km: Math.round(distanciaSimples(d, destinoFinal)) }))
     .filter(v => v.km <= maxKm)
     .sort((a, b) => a.km - b.km)
     .slice(0, 4);
+
+  // a própria cidade da base entra na disputa: se Santiago tem voo, o ônibus
+  // até Pontevedra sai de lá mesmo
+  if (state.realFares.has(r.dest.id) && distanciaSimples(r.dest, destinoFinal) > 5) {
+    vizinhos.unshift({ d: r.dest, km: Math.round(distanciaSimples(r.dest, destinoFinal)) });
+  }
 
   const achados = [];
   for (const v of vizinhos) {
@@ -831,7 +856,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
 
   if (!achados.length) return null;
   achados.sort((a, b) => a.total - b.total);
-  return achados[0];
+  return { ...achados[0], destinoFinal };
 }
 
 /* ------------------------------------------- trajeto com escala --------- */
@@ -1021,6 +1046,8 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
   const opcoes = [];
 
   if (comTerra) {
+    // o trecho de ônibus termina onde a pessoa pediu, não na cidade da base
+    const fim = comTerra.destinoFinal || r.dest;
     opcoes.push({
       chave: 'terra',
       tag: `★ voo + ${comTerra.terra.modo}`,
@@ -1030,17 +1057,17 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
         ${pernaVoo(comTerra.fare.ida, 'ida', r.people)}
         ${pernaVoo(comTerra.fare.volta, 'volta', r.people)}
         <a class="perna is-link perna-terra"
-           href="${googleTerra(comTerra.d.city, r.dest.city)}" target="_blank" rel="noopener nofollow">
-          <span class="perna-rota"><b>${esc(comTerra.d.city)}</b> → <b>${esc(r.dest.city)}</b>
+           href="${googleTerra(comTerra.d.city, fim.city)}" target="_blank" rel="noopener nofollow">
+          <span class="perna-rota"><b>${esc(comTerra.d.city)}</b> → <b>${esc(fim.city)}</b>
             <i class="perna-voo">${esc(comTerra.terra.modo)}</i></span>
           <span class="perna-data">${comTerra.km} km · cerca de ${esc(comTerra.terra.tempo)} por trecho</span>
           <span class="perna-preco">${fmt(comTerra.terra.preco)}<small>buscar →</small></span>
         </a>`,
       nota: `Um voo só até <b>${esc(comTerra.d.city)}</b> e ${esc(comTerra.terra.tempo)}
-             de ${esc(comTerra.terra.modo)} até ${esc(r.dest.city)}. O valor do
+             de ${esc(comTerra.terra.modo)} até <b>${esc(fim.city)}</b>. O valor do
              ${esc(comTerra.terra.modo)} é estimativa; confira no buscador.`,
       acao: `<button type="button" class="ver-destino" data-alt="${esc(comTerra.d.id)}">ver ${esc(comTerra.d.city)} →</button>`,
-      pontos: [state.origin, comTerra.saida, comTerra.d, r.dest],
+      pontos: [state.origin, comTerra.saida, comTerra.d, fim],
     });
   }
 
@@ -1071,7 +1098,13 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
         + (c.pernasVolta ? bloco(c.pernasVolta, c.esperaVoltaMin, `volta · ${fmt(c.voltaTotal)}`) : ''),
       nota: `Sem ônibus: tudo de avião, parando em <b>${esc(c.hub.city)}</b>.
              São <b>bilhetes separados</b> — a conexão não é garantida pela companhia,
-             e um atraso faz perder o voo seguinte.`,
+             e um atraso faz perder o voo seguinte.${(() => {
+               const f = alvoFinal(r);
+               return f.city !== r.dest.city
+                 ? ` O voo chega em ${esc(r.dest.city)}; de lá ainda faltam
+                     ${Math.round(distanciaSimples(r.dest, f))} km até ${esc(f.city)}.`
+                 : '';
+             })()}`,
       acao: '',
       pontos: paradas,
     });
@@ -1289,7 +1322,14 @@ function definirDestino(lugar) {
   }
   if (!alvo) return;
 
-  state.destinoAlvo = { ...alvo, pedido: lugar.city, kmDoPedido: distancia };
+  // guarda o lugar pedido com coordenadas: é ele que vale como destino final
+  state.destinoAlvo = {
+    ...alvo,
+    pedido: lugar.city,
+    pedidoLat: lugar.lat,
+    pedidoLon: lugar.lon,
+    kmDoPedido: distancia,
+  };
   $('#destino').value = lugar.city;
   $('#destinoList').hidden = true;
   $('#btnLimparDestino').hidden = false;

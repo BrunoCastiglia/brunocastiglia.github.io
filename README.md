@@ -59,6 +59,15 @@ para consulta; o código não está licenciado para uso de terceiros.
 
 ## Para onde a pessoa quer ir
 
+Quando o lugar pedido não tem voo, o site escolhe o **destino conhecido mais
+próximo** para calcular o voo — mas o último trecho por terra termina **onde a
+pessoa pediu**. Pedindo Pontevedra, o voo é calculado até Santiago de Compostela
+(51 km) e o ônibus oferecido é **Porto → Pontevedra**, não Porto → Santiago.
+
+A opção só de avião também diz quantos quilômetros ainda faltam do aeroporto de
+chegada até o lugar pedido.
+
+
 Abaixo do campo de origem há um campo opcional de destino. Ele busca nas 212
 cidades da base e, se não achar, no mapa do mundo — e aí **fica com o destino
 conhecido mais próximo**, dizendo quantos quilômetros faltam. É o "chegar o mais
