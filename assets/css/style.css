@@ -1130,3 +1130,7 @@ a.perna.is-link{padding:4px 8px}
    inteira da lateral e o calendário cabe. */
 #blocoDatas .grid-2{grid-template-columns:1fr;gap:9px}
 #blocoDatas input[type=date]{width:100%;min-width:0}
+
+/* Link de privacidade no rodapé do aviso legal: exigência do AdSense é que
+   ele exista e seja alcançável de qualquer página. */
+.aviso-legal p a{color:var(--accent);font-weight:600}

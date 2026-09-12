@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacidade — MoneyToGo</title>
+<meta name="description" content="Como o MoneyToGo trata dados: localização aproximada, armazenamento local, serviços de terceiros e publicidade.">
+<link rel="stylesheet" href="assets/css/style.css?v=34">
+<style>
+  body{overflow:auto}
+  .doc{max-width:760px;margin:0 auto;padding:32px 20px 64px;line-height:1.65}
+  .doc h1{font-size:26px;margin:0 0 6px}
+  .doc h2{font-size:16px;margin:30px 0 8px;padding-top:14px;border-top:1px solid var(--line-soft)}
+  .doc p,.doc li{font-size:14px;color:var(--txt-dim)}
+  .doc li{margin-bottom:6px}
+  .doc a{color:var(--accent)}
+  .doc .voltar{display:inline-block;margin-bottom:18px;font-size:13px;font-weight:600}
+  .doc .data{font-size:12px;color:var(--txt-faint);margin-bottom:22px}
+  .doc table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  .doc th,.doc td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  .doc th{color:var(--txt);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .doc code{font-size:12px;background:var(--panel-2);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<main class="doc">
+  <a class="voltar" href="./">← voltar ao mapa</a>
+  <h1>Privacidade</h1>
+  <p class="data">Última atualização: 12 de setembro de 2026</p>
+
+  <p>O MoneyToGo é um mapa que mostra para onde um orçamento de viagem dá para
+     ir. Não há cadastro, login nem conta: o site não pede nome, e-mail,
+     telefone, documento ou meio de pagamento, e não vende passagens.</p>
+
+  <h2>Localização</h2>
+  <p>Para saber de onde começar a busca, o site estima a sua cidade a partir do
+     endereço IP, usando <a href="https://get.geojs.io" rel="noopener">geojs.io</a>
+     ou <a href="https://ipwho.is" rel="noopener">ipwho.is</a>. É uma estimativa
+     de cidade, não a sua posição exata.</p>
+  <p>Se você clicar no botão de localização, o navegador pede a sua permissão
+     para usar o GPS. Essa permissão é sua e pode ser negada ou revogada a
+     qualquer momento nas configurações do navegador.</p>
+  <p><b>A localização detectada não é gravada nem enviada para nós.</b> Ela vive
+     na memória da página e some ao fechar a aba. Só quando você <i>digita</i>
+     uma cidade de origem é que ela fica guardada no seu próprio navegador, para
+     não precisar redigitar na próxima visita.</p>
+
+  <h2>O que fica guardado no seu navegador</h2>
+  <p>O site não usa cookies próprios. Usa o <code>localStorage</code>, que fica
+     no seu aparelho e nunca é enviado para nós:</p>
+  <table>
+    <tr><th>Chave</th><th>Para quê</th></tr>
+    <tr><td><code>ppi.origin</code></td><td>a cidade de origem que você digitou</td></tr>
+    <tr><td><code>ppi.detailsH</code></td><td>a altura que você escolheu para a barra inferior</td></tr>
+    <tr><td><code>ppi.ryanair.*</code></td><td>tarifas, rotas e aeroportos já consultados, para não repetir consultas (12 horas a 30 dias)</td></tr>
+    <tr><td><code>ppi.osm.stays.*</code></td><td>hospedagens encontradas no OpenStreetMap</td></tr>
+  </table>
+  <p>Para apagar tudo isso, basta limpar os dados do site no seu navegador.</p>
+
+  <h2>Serviços de terceiros</h2>
+  <p>Ao usar o site, o seu navegador conversa diretamente com estes serviços.
+     Cada um tem a sua própria política de privacidade e recebe o seu endereço
+     IP, como acontece em qualquer acesso na internet:</p>
+  <ul>
+    <li><b>Ryanair</b> — preços e horários de voo;</li>
+    <li><b>OpenStreetMap</b> e <b>Nominatim</b> — imagens do mapa, busca de
+        cidades e inventário de hospedagens;</li>
+    <li><b>Overpass API</b> — consulta de hospedagens no OpenStreetMap;</li>
+    <li><b>Frankfurter</b> — taxas de câmbio;</li>
+    <li><b>geojs.io</b> / <b>ipwho.is</b> — estimativa de cidade pelo IP;</li>
+    <li><b>Cloudflare (cdnjs)</b> — biblioteca de mapas;</li>
+    <li><b>Google</b>, <b>Booking.com</b> e <b>Airbnb</b> — apenas quando você
+        clica num link de busca ou reserva, que abre em nova aba.</li>
+  </ul>
+  <p>O MoneyToGo não vende passagens nem hospedagem, e não processa pagamentos:
+     a compra acontece no site da empresa, sob as regras dela.</p>
+
+  <h2>Publicidade</h2>
+  <p>O site pretende se sustentar com anúncios do <b>Google AdSense</b>. Quando
+     eles estiverem ativos:</p>
+  <ul>
+    <li>o Google e os seus parceiros podem usar cookies para exibir anúncios com
+        base nas suas visitas a este e a outros sites;</li>
+    <li>você pode desativar a publicidade personalizada nas
+        <a href="https://www.google.com/settings/ads" rel="noopener">configurações de anúncios do Google</a>;</li>
+    <li>há mais opções de desativação em
+        <a href="https://www.aboutads.info/choices/" rel="noopener">aboutads.info/choices</a>
+        e <a href="https://www.youronlinechoices.com/" rel="noopener">youronlinechoices.com</a>;</li>
+    <li>na União Europeia e no Reino Unido, o consentimento é pedido antes de
+        qualquer anúncio personalizado, e a sua escolha pode ser mudada depois.</li>
+  </ul>
+  <p>Nós não temos acesso aos cookies de publicidade nem aos dados que eles
+     coletam.</p>
+
+  <h2>Menores</h2>
+  <p>O site não é direcionado a menores de 13 anos e não coleta dados
+     conscientemente dessa faixa etária.</p>
+
+  <h2>Os seus direitos</h2>
+  <p>Como não guardamos dados seus em servidor nenhum — não há servidor: o site
+     é um conjunto de arquivos estáticos —, não há cadastro para acessar,
+     corrigir ou apagar. Tudo o que existe está no seu navegador e você apaga
+     quando quiser. Para os dados tratados pelo Google na publicidade, valem as
+     ferramentas e os direitos descritos na
+     <a href="https://policies.google.com/privacy" rel="noopener">política de privacidade do Google</a>.</p>
+
+  <h2>Mudanças</h2>
+  <p>Se esta política mudar, a data no topo é atualizada.</p>
+
+  <h2>Contato</h2>
+  <p>Dúvidas sobre privacidade:
+     <a href="mailto:SEU-EMAIL@EXEMPLO.COM">SEU-EMAIL@EXEMPLO.COM</a></p>
+  <!-- TROQUE o endereço acima. O AdSense exige um contato, e publicar um
+       e-mail numa página pública é escolha sua — por isso ficou em branco. -->
+
+  <a class="voltar" href="./">← voltar ao mapa</a>
+</main>
+</body>
+</html>
