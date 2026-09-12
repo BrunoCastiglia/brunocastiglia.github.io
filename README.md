@@ -162,6 +162,21 @@ por região: sem ela, o Porto tinha voo direto de Cagliari e ficava marcado como
 saída e a pessoa não tinha passado por Portugal no mapa. Conferir um par
 específico é a busca mais barata que existe, e resolve a maioria dos casos.
 
+> **A armadilha que causou o bloqueio.** O enquadramento automático do trajeto
+> movia o mapa; mover o mapa dispara `moveend`; `moveend` refaz a busca; a busca
+> redesenha o painel; o painel reenquadra o trajeto. O ciclo girava a cada
+> segundo — a tela piscava e a companhia recebia consultas em rajada.
+>
+> Duas travas quebram isso: o enquadramento acontece **uma vez por destino**
+> (`state.enquadrado`), e movimentos feitos pelo próprio código são marcados com
+> uma **janela de tempo** (`state.ignorarMoveAte`) em vez de um booleano — o
+> `fitBounds` dispara `moveend` *e* `zoomend`, e o booleano era consumido pelo
+> primeiro, deixando o segundo passar.
+>
+> Ao mexer em qualquer coisa que mova o mapa dentro de um fluxo de render, vale
+> medir: abrir um destino deve custar **2 redesenhos do painel**, e depois de
+> parado o contador não pode subir.
+
 O que segura isso:
 
 - **Fila**: no máximo 2 requisições ao mesmo tempo, 250 ms entre disparos.

@@ -45,6 +45,8 @@ const state = {
   filtro: 'todos',        // todos | confirmado (direto+escala) | direto
   viaEscala: new Map(),   // destino -> escala, pela malha da Ryanair
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
+  ignorarMoveAte: 0,      // até quando ignorar eventos de mapa (ms)
+  enquadrado: null,       // destino cujo trajeto já foi enquadrado
   destinoAlvo: null,      // para onde a pessoa quer ir, quando ela diz
   caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
   caminhosPorDestino: new Map(),   // resultado da busca de caminhos, por destino
@@ -158,7 +160,15 @@ function desenharRotaFixa({ animar = false } = {}) {
 function fixarCaminho(destId, pontos) {
   state.caminho = { destId, pontos };
   desenharCaminho(pontos);
-  enquadrarTrajeto(pontos);
+
+  // Enquadrar aqui fechava um ciclo: mover o mapa disparava 'moveend', que
+  // refazia a busca, que redesenhava o painel, que chamava esta função de
+  // novo — a tela piscava a cada segundo e a companhia recebia consultas em
+  // rajada. O enquadramento acontece uma vez por destino, e só.
+  if (state.enquadrado !== destId) {
+    state.enquadrado = destId;
+    enquadrarTrajeto(pontos);
+  }
 }
 
 /**
@@ -176,6 +186,9 @@ function enquadrarTrajeto(pontos) {
   clearTimeout(enquadreTimer);
   enquadreTimer = setTimeout(() => {
     const limites = L.latLngBounds(validos.map(p => [p.lat, p.lon]));
+    // o mapa vai se mexer por nossa conta: os eventos que isso gera não devem
+    // ser lidos como "a pessoa navegou"
+    state.ignorarMoveAte = Date.now() + 1500;
     map.fitBounds(limites, {
       paddingTopLeft: [60, 60],
       paddingBottomRight: [60, 40],
@@ -357,6 +370,9 @@ let areaTimer;
 function observarMapa() {
   map.on('moveend zoomend', () => {
     if (state.intro) return;
+    // fitBounds dispara 'moveend' e 'zoomend': um booleano era consumido pelo
+    // primeiro e deixava o segundo passar. Uma janela de tempo cobre os dois.
+    if (Date.now() < (state.ignorarMoveAte || 0)) return;
     if (state.ignorarMove) { state.ignorarMove = false; return; }
     clearTimeout(areaTimer);
     areaTimer = setTimeout(() => {
@@ -626,12 +642,16 @@ function select(id, { fly = false } = {}) {
   if (!r) return;
   // o enquadramento do trajeto substitui o antigo "voar até o pino"
   renderDetails(r);
-  if (state.origin) enquadrarTrajeto(pontosDoVoo(r));
+  if (state.origin) {
+    state.enquadrado = id;
+    enquadrarTrajeto(pontosDoVoo(r));
+  }
   $('#details').dataset.state = 'open';
   $('#detailsHandle').setAttribute('aria-expanded', 'true');
   ajustarAlturaAoConteudo();
   state.conexao = null;
   state.caminho = null;          // o trajeto do destino anterior não vale mais
+  if (state.enquadrado !== id) state.enquadrado = null;
   desenharRotaFixa({ animar:true });
 }
 
