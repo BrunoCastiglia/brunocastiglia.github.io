@@ -815,11 +815,11 @@ function clearDetails({ forcar = false } = {}) {
   $('#detailsTitle').textContent = 'Clique num destino do mapa para ver os voos';
   $('#detailsBody').innerHTML =
     `<p class="empty">Clique em um ponto do mapa ou em um destino da lista para ver as opções de voo e hospedagem.</p>
-     <div class="ad-strip" aria-hidden="true">
+     <aside class="ad-strip" aria-label="Publicidade">
        <div class="ad-slot" data-ad="strip1"></div>
        <div class="ad-slot" data-ad="strip2"></div>
        <div class="ad-slot" data-ad="strip3"></div>
-     </div>`;
+     </aside>`;
   mountAllAds($('#detailsBody'));
   // Sem destino escolhido não há o que mostrar: a barra fica recolhida e a
   // tela é só o mapa e o formulário. Ela se abre sozinha ao clicar num destino.
@@ -994,11 +994,11 @@ function renderDetails(r) {
       </section>`}
     </div>
 
-    <div class="ad-strip" aria-hidden="true">
+    <aside class="ad-strip" aria-label="Publicidade">
       <div class="ad-slot" data-ad="strip1"></div>
       <div class="ad-slot" data-ad="strip2"></div>
       <div class="ad-slot" data-ad="strip3"></div>
-    </div>`;
+    </aside>`;
 
   $('#detailsBody').querySelector('[data-alt]')?.addEventListener('click', e => {
     select(e.currentTarget.dataset.alt, { fly:true });
@@ -2132,6 +2132,8 @@ function setupForm() {
 
     d.dataset.state = open ? 'collapsed' : 'open';
     $('#detailsHandle').setAttribute('aria-expanded', String(!open));
+    // a faixa de anúncios só existe com a barra aberta: agora dá para montá-la
+    if (!open) setTimeout(() => mountAllAds($('#detailsBody')), 60);
     // recolher devolve altura ao mapa, abrir tira: nos dois casos o trajeto
     // precisa ser reenquadrado no retângulo novo
     setTimeout(reenquadrarSeNecessario, 260);

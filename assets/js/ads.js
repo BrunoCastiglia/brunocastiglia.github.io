@@ -25,6 +25,17 @@ export const ADS = {
 export function mountAd(el, slotKey) {
   if (!el || !ADS.ENABLED || !ADS.SLOTS[slotKey]) return;
   if (el.dataset.mounted === '1') return;
+
+  // Nunca montar num espaço invisível.
+  //
+  // A barra inferior abre recolhida, e `.details-body` fica com display:none.
+  // Como os três blocos da faixa vivem lá dentro, eles eram montados e
+  // contavam impressão sem ninguém poder vê-los — o AdSense proíbe anúncio em
+  // elemento oculto, e isso derruba conta. Quem estiver escondido é montado
+  // depois, quando a barra abrir (mountAllAds roda de novo nessa hora).
+  if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') return;
+  if (!el.getBoundingClientRect().width) return;
+
   el.dataset.mounted = '1';
   el.innerHTML = '';
 

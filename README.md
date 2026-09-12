@@ -988,6 +988,10 @@ que ajustar.
 
 ## Ligar os anúncios
 
+> **Antes de ligar, leia a seção seguinte.** O código está pronto; a conta e as
+> obrigações legais não.
+
+
 1. Cadastre o site no [Google AdSense](https://adsense.google.com) e espere a
    aprovação (precisa estar no ar num domínio próprio — AdSense não aprova `localhost`).
 2. No `index.html`, descomente a tag `<script>` do AdSense no `<head>` e ponha o seu `ca-pub-…`.
@@ -1004,6 +1008,42 @@ ocupando toda a largura do rodapé, dentro do painel de detalhes.
 
 Enquanto `ENABLED` for `false`, os espaços aparecem como caixas tracejadas — dá
 para conferir o layout sem infringir as regras do AdSense.
+
+### O que ainda falta para o AdSense
+
+O código está pronto: os espaços existem, o montador respeita a visibilidade e o
+rótulo "espaço publicitário" some quando entra anúncio de verdade. O que falta
+não é código:
+
+| Item | Estado |
+|---|---|
+| Espaços e montagem | **pronto** |
+| Anúncio nunca montado em elemento oculto | **pronto** |
+| Política de privacidade | **falta** — o AdSense exige |
+| CMP de consentimento (EEA/Reino Unido) | **falta** — obrigatório desde jan/2024 |
+| `ads.txt` na raiz do domínio | **falta** |
+| Conteúdo suficiente para aprovação | **risco** |
+
+**Política de privacidade.** É exigência do AdSense: precisa dizer que terceiros
+usam cookies para exibir anúncios e como a pessoa pode desativar. O site também
+faz geolocalização por IP e guarda escolhas em `localStorage` — as duas coisas
+precisam estar declaradas.
+
+**Consentimento.** Desde janeiro de 2024 o Google exige uma **CMP certificada**
+para tráfego do Espaço Econômico Europeu e do Reino Unido. Sem ela o Google
+simplesmente não serve anúncios a esses usuários — que é justamente o público
+deste site.
+
+**`ads.txt`.** Tem de ficar na raiz do domínio: `brunocastiglia.github.io/ads.txt`.
+Como o site mora num caminho de projeto (`/moneytogo/`), um arquivo neste
+repositório vai parar em `/moneytogo/ads.txt`, onde nenhum rastreador procura. É
+preciso um repositório `brunocastiglia.github.io` só para isso — ou um domínio
+próprio, que resolve isso e ajuda na aprovação.
+
+**Conteúdo.** A revisão do AdSense procura conteúdo original e substancial. Uma
+página única de ferramenta costuma ser recusada como "conteúdo de pouco valor".
+Vale ter páginas de apoio reais (como usar, como os preços são calculados, o que
+é estimativa e o que é confirmado) antes de pedir a revisão.
 
 ## Ligar o dinheiro de afiliado
 
