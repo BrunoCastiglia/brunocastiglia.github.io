@@ -75,7 +75,9 @@
   --mapa-fundo:#e8edf1;
 
   --radius:12px;
-  --sidebar-w:258px;
+  /* 258 px cortava o seletor de data nativo do Chrome, que tem largura
+     própria (campo + ícone de calendário) e não encolhe abaixo dela. */
+  --sidebar-w:286px;
   /* Origem dos avisos sobre o mapa: à direita da lateral flutuante e abaixo da
      barra superior, cuja altura o JS mede e escreve em --topbar-h. */
   --mapa-esq:12px;
@@ -1122,3 +1124,9 @@ a.perna.is-link{padding:4px 8px}
 /* Sem a concorrência, o destino escolhido pode crescer um pouco e ficar
    claramente "o" ponto da vez. */
 .map-wrap.foco .pin.is-selected{transform:translate(-50%,-50%) scale(1.12)}
+
+/* Os dois campos de data lado a lado ficavam com ~120 px cada e o widget
+   nativo do navegador aparecia cortado. Empilhados, cada um usa a largura
+   inteira da lateral e o calendário cabe. */
+#blocoDatas .grid-2{grid-template-columns:1fr;gap:9px}
+#blocoDatas input[type=date]{width:100%;min-width:0}

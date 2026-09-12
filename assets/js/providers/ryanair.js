@@ -508,7 +508,8 @@ export async function legFare(from, to, month, days, signal, depoisDe = null, an
  *
  * @returns {Promise<null|{hub, pernas:[{from,to,price,date}], total}>}
  */
-export async function findConnection(origin, dest, airports, month, days, signal) {
+export async function findConnection(origin, dest, airports, month, days, signal,
+                                     { maxHubs = 2 } = {}) {
   const porIata = new Map(airports.map(a => [a.iata, a]));
   const aOrigem = porIata.get(origin.iata);
   const aDestino = porIata.get(dest.iata);
@@ -530,10 +531,22 @@ export async function findConnection(origin, dest, airports, month, days, signal
       return { ...r, airport:h, desvio };
     })
     .filter(Boolean)
-    .sort((a, b) => a.desvio - b.desvio)
-    .slice(0, 2);          // os dois hubs de menor desvio
+    .sort((a, b) => a.desvio - b.desvio);
 
-  if (!candidatos.length) return null;
+  const escolhidos = candidatos.slice(0, maxHubs);
+
+  // Com mais de dois hubs pedidos, garantimos uma BASE da companhia na lista.
+  // O desvio sozinho escolhe o hub geograficamente no caminho, que muitas
+  // vezes voa duas vezes por semana; a base voa todo dia, e é isso que faz uma
+  // conexão fechar numa data marcada. Para Santander a volta só existe por
+  // Charleroi, que fica longe da linha reta e nunca entrava pelos dois
+  // primeiros — e o site anunciava "sem volta nesta janela".
+  if (maxHubs > 2 && !escolhidos.some(c => c.base)) {
+    const base = candidatos.find(c => c.base);
+    if (base) escolhidos[escolhidos.length - 1] = base;
+  }
+
+  if (!escolhidos.length) return null;
 
   // As duas pernas são buscadas em sequência, não em paralelo: a segunda só
   // pode partir depois que a primeira chega. Buscando as duas ao mesmo tempo,
@@ -579,7 +592,7 @@ export async function findConnection(origin, dest, airports, month, days, signal
     return null;
   }
 
-  const trajetos = await Promise.all(candidatos.map(async c => {
+  const trajetos = await Promise.all(escolhidos.map(async c => {
     const ida = await trecho(origin.iata, c.iata, dest.iata, null);
     if (!ida) return null;
     const [p1, p2, tipoIda] = ida;

@@ -206,9 +206,10 @@ function enquadrarTrajeto(pontos, { animar = true } = {}) {
     // o mapa vai se mexer por nossa conta: os eventos que isso gera não devem
     // ser lidos como "a pessoa navegou"
     state.ignorarMoveAte = Date.now() + 1500;
+    const folga = folgaDosAvisos();
     map.fitBounds(limites, {
-      paddingTopLeft: [70, 70],
-      paddingBottomRight: [70, 70],
+      paddingTopLeft: folga.topLeft,
+      paddingBottomRight: folga.bottomRight,
       maxZoom: 7,
       animate: animar,
       duration: 0.6,
@@ -216,6 +217,45 @@ function enquadrarTrajeto(pontos, { animar = true } = {}) {
   }, 140);
 }
 let enquadreTimer;
+
+/**
+ * Quanto o enquadramento precisa recuar de cada canto.
+ *
+ * As caixas de aviso, os filtros e a legenda ficam POR CIMA do mapa: uma folga
+ * fixa de 70 px não dava conta e o arco terminava atrás delas — o destino
+ * escolhido aparecia escondido debaixo do "Só preço confirmado" ou da legenda.
+ * Aqui a folga sai do tamanho real que essas caixas ocupam hoje na tela, então
+ * acompanha sozinha quando uma delas some (a legenda no modo foco) ou cresce
+ * (o contador de lotes durante a varredura).
+ */
+function folgaDosAvisos() {
+  const mapa = $('.map-wrap')?.getBoundingClientRect();
+  const MARGEM = 16, MIN = 40;
+  if (!mapa) return { topLeft:[70, 70], bottomRight:[70, 70] };
+
+  let esq = MIN, topo = MIN, dir = MIN, baixo = MIN;
+  for (const el of document.querySelectorAll('.map-overlay, .map-filtros, .leaflet-control-zoom')) {
+    if (el.hidden || getComputedStyle(el).opacity === '0') continue;
+    const c = el.getBoundingClientRect();
+    if (!c.width || !c.height) continue;
+
+    // De que lado do mapa a caixa está? A resposta diz qual folga ela come.
+    const coladaEsquerda = c.left - mapa.left < mapa.width / 2;
+    const coladaTopo     = c.top  - mapa.top  < mapa.height / 2;
+    if (coladaEsquerda) esq  = Math.max(esq,  c.right - mapa.left + MARGEM);
+    else                dir  = Math.max(dir,  mapa.right - c.left + MARGEM);
+    if (coladaTopo)     topo = Math.max(topo, c.bottom - mapa.top + MARGEM);
+    else                baixo = Math.max(baixo, mapa.bottom - c.top + MARGEM);
+  }
+
+  // Nenhum canto pode comer mais de 40% do mapa, senão não sobra onde desenhar
+  // e o Leaflet joga o zoom para o mínimo.
+  const tetoX = mapa.width * 0.4, tetoY = mapa.height * 0.4;
+  return {
+    topLeft:     [Math.min(esq, tetoX), Math.min(topo, tetoY)],
+    bottomRight: [Math.min(dir, tetoX), Math.min(baixo, tetoY)],
+  };
+}
 
 /** Reenquadra o trajeto aberto, se houver, depois de o mapa mudar de tamanho. */
 function reenquadrarSeNecessario() {
@@ -1033,6 +1073,29 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
     vizinhos.unshift({ d: r.dest, km: Math.round(distanciaSimples(r.dest, destinoFinal)) });
   }
 
+  // AEROPORTOS vizinhos, não só as nossas cidades.
+  //
+  // A lista de destinos tem 212 cidades; a malha da companhia tem centenas de
+  // aeroportos. Para Bilbao, as cidades mais próximas da nossa lista são
+  // Zaragoza (245 km) e Bordeaux (257 km) — longe demais para ônibus —, mas
+  // existe Vitória a 60 km, que não é uma das nossas cidades e por isso nunca
+  // entrava na disputa. Era o caso em que a pessoa via "sem volta nesta janela"
+  // enquanto havia um voo a uma hora de ônibus do destino.
+  const jaTemCidade = new Set(vizinhos.map(v => v.d.id));
+  for (const apt of RYA.nearestAirports(state.airports, destinoFinal, maxKm, 6)) {
+    if (apt.iata === r.dest.air) continue;                    // o próprio já foi
+    // se já existe uma cidade nossa servida por este aeroporto, não repete
+    if ([...jaTemCidade].some(id => DESTINATIONS.find(d => d.id === id)?.air === apt.iata)) continue;
+    if (apt.km < 12) continue;                                // é o próprio destino
+    vizinhos.push({
+      d: { id:null, city:apt.city, lat:apt.lat, lon:apt.lon, air:apt.iata },
+      km: apt.km,
+      aeroporto: apt,
+    });
+  }
+  vizinhos.sort((a, b) => a.km - b.km);
+  vizinhos.splice(4);          // cada candidato custa consultas; quatro bastam
+
   const achados = [];
   for (const v of vizinhos) {
     const terra = P.groundLeg(v.km);
@@ -1045,7 +1108,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
     }
 
     // 2) senão, existe voo direto até ela saindo de algum aeroporto perto?
-    const apt = RYA.nearestAirport(state.airports, v.d, 130);
+    const apt = v.aeroporto || RYA.nearestAirport(state.airports, v.d, 130);
     if (!apt) continue;
     const direto = await RYA.directFromNearbyAirport(
       state.origin, apt, state.airports, state.month, state.days, signal, [],
@@ -1056,6 +1119,39 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
         ...v, terra, saida: direto.saida,
         fare: { price: direto.price, ida: direto.ida, volta: direto.volta },
         total: direto.price + terra.preco,
+      });
+      if (achados.length >= 2) break;
+      continue;
+    }
+
+    // 3) sem voo direto até o vizinho, vale uma CONEXÃO até ele.
+    //
+    // Era aqui que o site desistia e anunciava "sem volta nesta janela". Para
+    // Bilbao em datas fixas a volta direta não existe — a conexão pediria 45 h
+    // em Bergamo, o que o teto de 28 h recusa, e com razão. Mas partindo de
+    // Santander, a 100 km, a volta fecha em 25 h de escala. Quem marcou férias
+    // não quer saber que "não dá": quer saber que dá, de ônibus até o
+    // aeroporto ao lado.
+    const saida = state.originAirports?.[0];
+    if (!saida) continue;
+    // Três hubs aqui, e não os dois de sempre: este caminho só roda quando os
+    // outros falharam, então vale gastar uma consulta a mais para incluir uma
+    // base da companhia — que é onde as datas fixas costumam fechar.
+    const viaEscala = await RYA.findConnection(
+      { iata: saida.iata }, { iata: apt.iata }, state.airports, state.month, state.days, signal,
+      { maxHubs: 3 },
+    );
+    if (signal?.aborted) return null;
+    if (viaEscala?.completa) {
+      achados.push({
+        ...v, terra, saida,
+        fare: {
+          price: viaEscala.total,
+          ida: viaEscala.pernas,            // duas pernas, não uma
+          volta: viaEscala.pernasVolta,
+          hub: viaEscala.hub,
+        },
+        total: viaEscala.total + terra.preco,
       });
     }
     if (achados.length >= 2) break;          // compara dois candidatos
@@ -1327,6 +1423,18 @@ function pernaVoo(p, rotulo, people) {
  * aparecem, com o preço de cada uma, e o mapa desenha a que estiver sob o
  * ponteiro.
  */
+/**
+ * Desenha um trecho que pode ser um voo só ou uma conexão de duas pernas.
+ *
+ * O card de "voo + ônibus" nasceu supondo um voo direto até a cidade vizinha.
+ * Desde que ele também aceita conexões, `ida` e `volta` podem vir como lista.
+ */
+function pernasDoTrecho(trecho, rotulo, people) {
+  if (!trecho) return '';
+  if (!Array.isArray(trecho)) return pernaVoo(trecho, rotulo, people);
+  return trecho.map((p, i) => pernaVoo(p, `${rotulo} ${i + 1}`, people)).join('');
+}
+
 function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
   const caixa = $('#conexaoBox');
   if (!caixa) return;
@@ -1338,7 +1446,10 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
   if (comTerra) {
     // o trecho de ônibus termina onde a pessoa pediu, não na cidade da base
     const fim = comTerra.destinoFinal || r.dest;
-    const voo = comTerra.fare.ida?.minutos || 0;
+    // com conexão, a duração do voo é a soma das pernas
+    const voo = Array.isArray(comTerra.fare.ida)
+      ? comTerra.fare.ida.reduce((n, p) => n + (p?.minutos || 0), 0)
+      : (comTerra.fare.ida?.minutos || 0);
     const bus = Math.round(comTerra.km / 70 * 60);
     opcoes.push({
       duracao: voo + bus + 90,          // +90 min de aeroporto e baldeação
@@ -1347,8 +1458,8 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
       total: comTerra.total,
       resumo: `voo ida e volta + ${comTerra.terra.modo}`,
       corpo: `
-        ${pernaVoo(comTerra.fare.ida, 'ida', r.people)}
-        ${pernaVoo(comTerra.fare.volta, 'volta', r.people)}
+        ${pernasDoTrecho(comTerra.fare.ida, 'ida', r.people)}
+        ${pernasDoTrecho(comTerra.fare.volta, 'volta', r.people)}
         <a class="perna is-link perna-terra"
            href="${googleTerra(comTerra.d.city, fim.city)}" target="_blank" rel="noopener nofollow">
           <span class="perna-rota"><b>${esc(comTerra.d.city)}</b> → <b>${esc(fim.city)}</b>
@@ -1359,7 +1470,11 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
       nota: `Um voo só até <b>${esc(comTerra.d.city)}</b> e ${esc(comTerra.terra.tempo)}
              de ${esc(comTerra.terra.modo)} até <b>${esc(fim.city)}</b>. O valor do
              ${esc(comTerra.terra.modo)} é estimativa; confira no buscador.`,
-      acao: `<button type="button" class="ver-destino" data-alt="${esc(comTerra.d.id)}">ver ${esc(comTerra.d.city)} →</button>`,
+      // Só há para onde ir quando a escala é uma cidade da nossa lista; quando
+      // é um aeroporto vizinho não existe destino a abrir.
+      acao: comTerra.d.id
+        ? `<button type="button" class="ver-destino" data-alt="${esc(comTerra.d.id)}">ver ${esc(comTerra.d.city)} →</button>`
+        : '',
       pontos: [state.origin, comTerra.saida, comTerra.d, fim],
     });
   }

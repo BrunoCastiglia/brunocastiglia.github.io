@@ -761,7 +761,20 @@ sempre à vista, com o texto completo a um clique.
 de altura sozinha (a dica sob a origem passa de "digite 3 letras" para "Itália ·
 detectado pelo IP"). Abaixo de 880 px os blocos empilham.
 
-### O mapa tem um tamanho mínimo
+### O enquadramento respeita o que está por cima do mapa
+
+As caixas de aviso, os filtros e a legenda ficam **por cima** do mapa. Uma folga
+fixa de 70 px no `fitBounds` não dava conta: o destino escolhido aparecia atrás
+do "Só preço confirmado" ou da legenda, e o arco terminava debaixo delas.
+
+A folga agora sai do tamanho **real** que essas caixas ocupam na hora do
+enquadramento. Cada uma diz de que lado do mapa está (comparando o seu centro
+com o centro do mapa) e come a folga daquele canto. Assim a conta acompanha
+sozinha quando uma delas some — a legenda no modo foco — ou cresce, como o
+contador de lotes durante a varredura. Nenhum canto pode passar de 40% do mapa,
+senão não sobra onde desenhar e o Leaflet joga o zoom para o mínimo.
+
+## O mapa tem um tamanho mínimo
 
 O teto da barra inferior sai de uma regra sobre o **mapa**, não sobre a barra:
 
