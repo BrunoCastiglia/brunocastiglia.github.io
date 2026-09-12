@@ -1,0 +1,12 @@
+{
+  "name": "moneytogo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Diga quanto você tem e veja no mapa para onde dá para ir, com preço real de voo quando existe.",
+  "scripts": {
+    "dev": "node serve.mjs",
+    "start": "node serve.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "license": "SEE LICENSE IN LICENSE"
+}
