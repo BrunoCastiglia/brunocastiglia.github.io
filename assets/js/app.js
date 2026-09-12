@@ -168,6 +168,7 @@ function desenharRotaFixa({ animar = false } = {}) {
 function fixarCaminho(destId, pontos) {
   state.caminho = { destId, pontos };
   desenharCaminho(pontos);
+  paintSelection();      // agora que há trajeto, a reta tracejada sai de cena
 
   // Enquadrar aqui fechava um ciclo: mover o mapa disparava 'moveend', que
   // refazia a busca, que redesenhava o painel, que chamava esta função de
@@ -408,8 +409,15 @@ function paintSelection() {
   // redesenhar enquanto a seleção estiver de pé.
   $('.map-wrap')?.classList.toggle('foco', !!state.selected);
   if (routeLine) { routeLine.remove(); routeLine = null; }
+
+  // A linha tracejada é a ligação em linha reta origem→destino. Ela vale
+  // enquanto o trajeto de verdade ainda não é conhecido; depois que ele é
+  // desenhado, a reta passa a contradizê-lo — o mapa mostrava uma ligação
+  // direta a Perpignan ao lado de um caminho que ia por Bergamo e Toulouse,
+  // e ainda por cima o site dizia "tem voo direto".
+  const temTrajeto = state.caminho?.destId === state.selected;
   const r = state.results.find(x => x.dest.id === state.selected);
-  if (r && state.origin) {
+  if (r && state.origin && !temTrajeto) {
     routeLine = L.polyline(
       [[state.origin.lat, state.origin.lon], [r.dest.lat, r.dest.lon]],
       { color:'#63a8ff', weight:1.6, opacity:.75, dashArray:'5 6' },
@@ -819,6 +827,39 @@ function clearDetails({ forcar = false } = {}) {
   $('#detailsHandle').setAttribute('aria-expanded', 'false');
 }
 
+/**
+ * O que dizer quando não há preço confirmado para o destino aberto.
+ *
+ * "Tem voo direto — estamos buscando o preço" só é verdade enquanto a busca
+ * está correndo. Depois que ela termina, repetir isso é contraditório: ao lado
+ * o site mostra um trajeto com escala e ônibus, e embaixo promete um voo
+ * direto que não existe nas datas pedidas.
+ *
+ * A malha de rotas é o que diz "existe voo direto", e ela não sabe de datas —
+ * uma rota pode voar duas vezes por semana e não operar no dia escolhido. É
+ * justamente o que acontece no modo calendário.
+ */
+function textoSemConfirmado(r) {
+  const valor = fmt(r.flight || r.airPP);
+  const buscando = ['loading', 'varrendo'].includes($('#fareStatus')?.dataset.kind);
+
+  if (r.voaDireto && buscando) {
+    return `Este destino <b>tem voo direto</b> da companhia — estamos buscando o preço.
+            O valor de ${valor} no resumo é estimativa até ele chegar.`;
+  }
+  if (r.voaDireto && state.quando === 'datas') {
+    return `A companhia <b>voa direto</b> para este destino, mas <b>não nos dias que você
+            escolheu</b> — por isso o caminho ao lado tem escala. O valor de ${valor} no
+            resumo é estimativa de planejamento.`;
+  }
+  if (r.voaDireto) {
+    return `A companhia <b>tem a rota direta</b>, mas não encontramos tarifa para este
+            período. O valor de ${valor} no resumo é estimativa de planejamento.`;
+  }
+  return `Sem preço confirmado para esta rota. O valor de <b>${valor}</b>
+          no resumo é estimativa de planejamento — confira na busca ao lado.`;
+}
+
 function renderDetails(r) {
   const v = VERDICT[r.verdict];
   const mode = MODES[r.mode] || MODES.both;
@@ -930,12 +971,7 @@ function renderDetails(r) {
         <div class="conexao" id="conexaoBox" hidden></div>
         ${flights.map(optRow).join('')}
         ${(!r.real && !r.useGround) ? `
-          <p class="sem-confirmado" id="semConfirmado">${r.voaDireto
-            ? `Este destino <b>tem voo direto</b> da companhia — estamos buscando o preço.
-               O valor de ${fmt(r.flight || r.airPP)} no resumo é estimativa até ele chegar.`
-            : `Sem preço confirmado para esta rota. O valor de <b>${fmt(r.flight || r.airPP)}</b>
-               no resumo é estimativa de planejamento — confira na busca ao lado.`}
-          </p>` : ''}
+          <p class="sem-confirmado" id="semConfirmado">${textoSemConfirmado(r)}</p>` : ''}
       </section>` : ''}
 
       ${mode.stay ? `
@@ -1097,6 +1133,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
   vizinhos.splice(4);          // cada candidato custa consultas; quatro bastam
 
   const achados = [];
+  let tentativasCaras = 0;
   for (const v of vizinhos) {
     const terra = P.groundLeg(v.km);
 
@@ -1134,6 +1171,12 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
     // aeroporto ao lado.
     const saida = state.originAirports?.[0];
     if (!saida) continue;
+    // Uma conexão até o vizinho custa de 4 a 8 consultas, e há vários vizinhos:
+    // fazer isso para todos é o tipo de leque que já nos rendeu um bloqueio da
+    // companhia. Só o mais próximo ganha essa tentativa.
+    if (tentativasCaras >= 1) continue;
+    tentativasCaras++;
+
     // Três hubs aqui, e não os dois de sempre: este caminho só roda quando os
     // outros falharam, então vale gastar uma consulta a mais para incluir uma
     // base da companhia — que é onde as datas fixas costumam fechar.
@@ -1432,7 +1475,12 @@ function pernaVoo(p, rotulo, people) {
 function pernasDoTrecho(trecho, rotulo, people) {
   if (!trecho) return '';
   if (!Array.isArray(trecho)) return pernaVoo(trecho, rotulo, people);
-  return trecho.map((p, i) => pernaVoo(p, `${rotulo} ${i + 1}`, people)).join('');
+
+  // A lista que vem de `findConnection` é [perna, perna, tipoDaEscala] — o
+  // terceiro item é uma string, não um voo. Desenhá-lo dava uma linha
+  // "undefined → undefined · € NaN" no card.
+  const voos = trecho.filter(p => p && typeof p === 'object' && p.depart);
+  return voos.map((p, i) => pernaVoo(p, `${rotulo} ${i + 1}`, people)).join('');
 }
 
 function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
@@ -1520,6 +1568,22 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
   }
 
   if (!opcoes.length) { caixa.hidden = true; return; }
+
+  // Fora as opções que perdem em TUDO.
+  //
+  // A tela promete duas coisas: a mais rápida e a mais barata. Uma opção que é
+  // ao mesmo tempo mais cara e mais lenta que outra não é nenhuma das duas — é
+  // só ruído ocupando metade do espaço. Para o Porto o site chegou a mostrar um
+  // voo + ônibus de € 339 em 8h34 ao lado de uma escala de € 102 em 7h25, com
+  // esta última marcada como "mais rápida e mais barata": a própria tela dizia
+  // que a outra não servia para nada.
+  //
+  // A folga de 5% no preço evita descartar por diferença irrelevante — uma
+  // opção € 3 mais cara mas duas horas mais curta continua valendo a pena.
+  const dominada = (a, b) =>
+    b.total <= a.total * 0.95 && b.duracao <= a.duracao;
+  const sobreviventes = opcoes.filter(o => !opcoes.some(x => x !== o && dominada(o, x)));
+  if (sobreviventes.length) opcoes.length = 0, opcoes.push(...sobreviventes);
 
   // Esquerda: a mais rápida, em dourado. Direita: a mais barata, em verde.
   // Quando só há uma opção, ela fica sozinha e sem disputa.

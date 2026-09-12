@@ -651,6 +651,44 @@ que sobraram são aeroportos regionais sem destino turístico próprio.
 Vale repetir esse cruzamento sempre que a malha mudar — o script está no
 histórico e leva segundos.
 
+## Nunca mostrar uma opção que perde em tudo
+
+A tela promete duas coisas: a mais rápida e a mais barata. Uma opção que é ao
+mesmo tempo **mais cara e mais lenta** que outra não é nenhuma das duas — é
+ruído ocupando metade do espaço.
+
+Para o Porto o site chegou a mostrar um voo + ônibus de € 339 em 8h34 ao lado de
+uma escala de € 102 em 7h25, esta última marcada como "mais rápida e mais
+barata": a própria tela dizia que a outra não servia para nada. Agora as opções
+dominadas são descartadas antes de desenhar, com 5% de folga no preço — uma
+opção € 3 mais cara mas duas horas mais curta continua valendo.
+
+## Escala: nunca menos de 2 horas
+
+O mínimo entre a chegada de uma perna e a partida da seguinte é **2 horas**, e o
+filtro é sobre o horário real, não sobre o dia (a API só filtra por dia). São
+bilhetes separados, sem proteção de conexão: qualquer atraso num intervalo menor
+faz perder o voo seguinte, e o trajeto que o site mostrou vira um problema caro
+de quem confiou nele.
+
+## O que o site diz quando não há preço confirmado
+
+A malha de rotas é o que diz "existe voo direto", e **ela não sabe de datas** —
+uma rota pode voar duas vezes por semana e não operar no dia escolhido. Dizer
+"tem voo direto — estamos buscando o preço" depois que a busca terminou era
+contraditório: ao lado o site mostrava um trajeto com escala e ônibus, e embaixo
+prometia um voo direto que não existe naquelas datas.
+
+A frase agora depende do estado: enquanto a busca corre, "estamos buscando"; no
+modo calendário, "voa direto, mas não nos dias que você escolheu"; no modo
+duração, "tem a rota direta, mas não encontramos tarifa para este período".
+
+## A reta tracejada sai quando o trajeto aparece
+
+A linha tracejada origem→destino vale enquanto o caminho real não é conhecido.
+Depois que ele é desenhado, a reta passa a contradizê-lo: o mapa mostrava uma
+ligação direta a Perpignan ao lado de um caminho que ia por Bergamo e Toulouse.
+
 ## Foco no trajeto
 
 Com um destino aberto, o mapa fica com **o trajeto, as duas pontas e mais nada**.

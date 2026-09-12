@@ -193,6 +193,12 @@ export function definirDatas(ida, volta) {
   datasFixas = ida ? { ida, volta: volta || null } : null;
 }
 
+/** As datas escolhidas no calendário, ou null no modo duração. */
+export const datasExatas = () => datasFixas;
+
+/** Janela de um dia inteiro, para prender uma perna à data pedida. */
+const diaInteiro = d => [`${d}T00:00:00`, `${d}T23:59:59`];
+
 /**
  * Identifica a janela atual para as chaves de cache.
  *
@@ -610,15 +616,26 @@ export async function findConnection(origin, dest, airports, month, days, signal
     const base = Math.max(1, days - 1);
     const voltaDesde = somaHoras(p2.arrive, base * 24);
 
-    let volta = await trecho(
-      dest.iata, c.iata, origin.iata, voltaDesde, somaHoras(p2.arrive, (base + 3) * 24),
-    );
-    let voltaAmpliada = false;
-    if (!volta) {
+    // No modo calendário a PRIMEIRA perna da volta parte no dia marcado — as
+    // seguintes podem cair no dia seguinte, que é como uma escala funciona e
+    // como as pessoas entendem "volto dia 28": saio do destino no dia 28.
+    // Nada de janela ampliada aqui: a lateral promete só esses dias.
+    const exatas = datasExatas();
+    let volta, voltaAmpliada = false;
+
+    if (exatas?.volta) {
+      const [de, ate] = diaInteiro(exatas.volta);
+      volta = await trecho(dest.iata, c.iata, origin.iata, de, ate);
+    } else {
       volta = await trecho(
-        dest.iata, c.iata, origin.iata, voltaDesde, somaHoras(p2.arrive, (base + 12) * 24),
+        dest.iata, c.iata, origin.iata, voltaDesde, somaHoras(p2.arrive, (base + 3) * 24),
       );
-      voltaAmpliada = !!volta;
+      if (!volta) {
+        volta = await trecho(
+          dest.iata, c.iata, origin.iata, voltaDesde, somaHoras(p2.arrive, (base + 12) * 24),
+        );
+        voltaAmpliada = !!volta;
+      }
     }
 
     const idaTotal = p1.price + p2.price;
@@ -701,13 +718,25 @@ export async function directRoundTrip(fromIata, toIata, month, days, signal) {
   const soma = (iso, d) =>
     new Date(new Date(iso).getTime() + d * 864e5).toISOString().slice(0, 19);
 
-  let volta = await legFare(toIata, fromIata, month, days, signal,
-    soma(ida.arrive, base), soma(ida.arrive, base + 3));
-  let ampliada = false;
-  if (!volta) {
+  // Modo calendário: a volta é O dia pedido, e não "a chegada mais a duração".
+  // Com 26/09 → 28/09 a conta dava 27/09, um dia antes do que a pessoa marcou.
+  // E a janela ampliada não pode existir aqui: a lateral promete "só entram
+  // voos que partem e voltam nesses dias", e ampliar devolvia uma volta em
+  // 05/10 para quem pediu 28/09.
+  const exatas = datasExatas();
+  let volta, ampliada = false;
+
+  if (exatas?.volta) {
+    const [de, ate] = diaInteiro(exatas.volta);
+    volta = await legFare(toIata, fromIata, month, days, signal, de, ate);
+  } else {
     volta = await legFare(toIata, fromIata, month, days, signal,
-      soma(ida.arrive, base), soma(ida.arrive, base + 12));
-    ampliada = !!volta;
+      soma(ida.arrive, base), soma(ida.arrive, base + 3));
+    if (!volta) {
+      volta = await legFare(toIata, fromIata, month, days, signal,
+        soma(ida.arrive, base), soma(ida.arrive, base + 12));
+      ampliada = !!volta;
+    }
   }
   if (!volta) return null;
 
