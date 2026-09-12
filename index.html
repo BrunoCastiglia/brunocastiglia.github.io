@@ -14,7 +14,7 @@
 
 <link rel="preconnect" href="https://basemaps.cartocdn.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="assets/css/style.css?v=15">
+<link rel="stylesheet" href="assets/css/style.css?v=23">
 
 <!-- ===== ANÚNCIOS =====
      Quando sua conta do Google AdSense for aprovada, descomente a linha abaixo
@@ -85,7 +85,7 @@
         <span class="money-symbol" id="curSymbol">€</span>
         <input type="number" id="budget" name="budget" min="20" step="25" value="200" required>
       </div>
-      <p class="hint">a barra vai até <b id="rangeMaxLabel">€ 1.000</b> · digite para mais</p>
+      <p class="hint">barra até <b id="rangeMaxLabel">€ 1.000</b></p>
     </div>
   </div>
 </header>
@@ -221,17 +221,19 @@
       </div>
     </div>
 
-    <p class="aviso-legal">
-      <b>Aviso.</b> Este site não vende passagens nem faz reservas. Os links abrem
-      o site da companhia ou um buscador, em nova aba, e a compra acontece lá —
-      <b>cada reserva é de responsabilidade de quem a faz</b>, incluindo conferir
-      preço, datas, bagagem e as condições no momento do pagamento. Os trajetos com
-      escala são <b>bilhetes separados</b>, sem proteção de conexão: um atraso pode
-      fazer perder o voo seguinte. Tudo aqui é calculado automaticamente, sem
-      revisão humana, a partir de dados públicos que mudam a todo momento —
-      serve para <b>explorar possibilidades</b>, não como garantia de preço,
-      disponibilidade ou viabilidade da viagem.
-    </p>
+    <details class="aviso-legal">
+      <summary><b>Aviso.</b> Este site não vende passagens nem faz reservas —
+        <b>cada reserva é de responsabilidade de quem a faz</b>. Tudo aqui é
+        calculado automaticamente. <i>Ler o aviso completo</i></summary>
+      <p>Os links abrem o site da companhia ou um buscador, em nova aba, e a
+        compra acontece lá — incluindo conferir preço, datas, bagagem e as
+        condições no momento do pagamento. Os trajetos com escala são
+        <b>bilhetes separados</b>, sem proteção de conexão: um atraso pode fazer
+        perder o voo seguinte. Tudo é calculado sem revisão humana, a partir de
+        dados públicos que mudam a todo momento — serve para
+        <b>explorar possibilidades</b>, não como garantia de preço,
+        disponibilidade ou viabilidade da viagem.</p>
+    </details>
   </footer>
 </div>
 
@@ -249,6 +251,6 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script type="module" src="assets/js/app.js?v=15"></script>
+<script type="module" src="assets/js/app.js?v=23"></script>
 </body>
 </html>

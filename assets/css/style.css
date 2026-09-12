@@ -75,11 +75,11 @@
   --mapa-fundo:#e8edf1;
 
   --radius:12px;
-  --sidebar-w:312px;
+  --sidebar-w:258px;
   /* Origem dos avisos sobre o mapa: à direita da lateral flutuante e abaixo da
      barra superior, cuja altura o JS mede e escreve em --topbar-h. */
-  --mapa-esq:calc(var(--sidebar-w) + 24px);
-  --mapa-topo:calc(var(--topbar-h, 118px) + 24px);
+  --mapa-esq:12px;
+  --mapa-topo:12px;
   --details-h:clamp(92px, 10vh, 132px);
   --shadow:0 6px 20px rgba(23,43,77,.10), 0 1px 3px rgba(23,43,77,.08);
   --font:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -103,10 +103,10 @@ button,input,select{font:inherit;color:inherit}
    margem nos quatro lados, para o mapa continuar visível em volta. Duas
    linhas, na ordem em que a pessoa decide: onde, depois quanto. */
 .topbar{
-  position:absolute;top:12px;left:12px;right:12px;z-index:1200;
-  display:flex;flex-direction:column;gap:8px;
-  padding:10px 16px;background:var(--panel);
-  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  position:relative;z-index:1200;
+  display:flex;flex-direction:column;gap:6px;
+  padding:8px 14px;background:var(--panel);
+  border-bottom:1px solid var(--line);
 }
 .topbar-linha{display:flex;align-items:flex-start;gap:16px}
 .topbar-linha-1{align-items:flex-start}
@@ -190,24 +190,22 @@ button,input,select{font:inherit;color:inherit}
 /* ------------------------------------------------------- layout ----- */
 /* O mapa ocupa tudo; a barra superior e a lateral pairam sobre ele. Só a
    barra de detalhes continua ancorada, porque cresce e empurraria o mapa. */
+/* Cada região tem o seu espaço: nada fica por cima do mapa. Sobrepor a barra
+   e a lateral escondia justamente os destinos mais próximos da origem, que são
+   os que mais interessam. */
 .layout{
-  height:100%;
+  height:calc(100% - var(--topbar-h, 104px));
   display:grid;
+  grid-template-columns:var(--sidebar-w) 1fr;
   grid-template-rows:1fr auto;
-  grid-template-areas:"map" "details";
-  position:relative;
+  grid-template-areas:"side map" "side details";
 }
 
 /* ------------------------------------------------------ lateral ----- */
 /* --topbar-h é medido em tempo real pelo JS: a barra muda de altura quando
    as dicas embrulham, e uma margem fixa aqui ora sobrava, ora encavalava. */
 .sidebar{
-  position:absolute;z-index:900;
-  left:12px;top:calc(var(--topbar-h, 118px) + 24px);
-  width:var(--sidebar-w);
-  max-height:calc(100% - var(--topbar-h, 118px) - 36px);
-  background:var(--panel);border:1px solid var(--line);
-  border-radius:14px;box-shadow:var(--shadow);
+  grid-area:side;background:var(--panel);border-right:1px solid var(--line);
   display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
 }
 .sidebar::-webkit-scrollbar,.results-list::-webkit-scrollbar,.details-body::-webkit-scrollbar{width:9px}
@@ -446,7 +444,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .dlg .note{font-size:11.5px;color:var(--txt-faint);background:var(--bg-2);padding:9px 11px;border-radius:8px}
 
 /* ---------------------------------------------------- responsivo ---- */
-@media (max-width:1180px){
+@media (max-width:1060px){
   .dgrid{grid-template-columns:1fr 1fr;gap:14px}
 }
 @media (max-width:880px){
@@ -895,7 +893,10 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
    é o que dá espaço para os dois caminhos ficarem lado a lado sem apertar. */
 .dgrid-sem-busca{grid-template-columns:1fr}
 .dgrid-sem-busca.dgrid-both{grid-template-columns:2.2fr minmax(230px,1fr)}
-@media (max-width:1180px){ .conexao.duas-opcoes{grid-template-columns:1fr} }
+/* O limiar era 1180 px de janela, de quando a lateral tinha 352 px. Com ela em
+   258 px sobra largura para os dois cards lado a lado bem antes disso — e
+   empilhados eles dobram a altura da barra, que é o que come o mapa. */
+@media (max-width:980px){ .conexao.duas-opcoes{grid-template-columns:1fr} }
 
 /* botão que dispara a busca de caminhos (em vez de buscar sozinho) */
 .procurar-caminhos{
@@ -995,3 +996,108 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 }
 .map-limpar:hover{border-color:var(--over);color:var(--over);background:var(--panel)}
 .map-limpar i{font-style:normal;font-size:11px;line-height:1}
+
+/* ============ DENSIDADE ================================================
+   A tela tinha informação boa em caixas grandes demais: a barra de cima
+   sozinha comia 190 px, a lateral 312 px, e o mapa — que é o produto — ficava
+   espremido entre as duas. Aqui os controles encolhem para o tamanho do que
+   realmente carregam, e o espaço vai para o mapa e para o respiro entre os
+   blocos, não para dentro deles. */
+
+/* ---- barra superior: de 190 px para ~104 px ---- */
+.topbar .brand-mark{width:26px;height:26px;font-size:15px;border-radius:8px}
+.topbar .brand-text strong{font-size:13.5px}
+.topbar .brand-text small{display:none}     /* o nome já diz; a frase repetia */
+.topbar-linha-1{align-items:center;gap:12px}
+.topbar-lugares{gap:10px}
+/* `.field` é uma coluna por padrão; aqui o rótulo fica ao LADO do campo, e
+   `flex-direction` precisa ser dito — trocar só o `display` não desfaz a
+   coluna herdada. */
+.topbar-lugares .field-topo{
+  position:relative;display:flex;flex-direction:row;align-items:center;gap:8px;
+}
+.topbar-lugares .field-topo > label{
+  margin:0;flex:none;font-size:11px;color:var(--txt-dim);white-space:nowrap;
+}
+.field-topo .combo{flex:1;min-width:0}
+.field-topo input{padding-top:6px;padding-bottom:6px;font-size:13px}
+/* A dica vira legenda sob o campo, fora do fluxo: no fluxo ela empurrava a
+   linha inteira para baixo só para repetir o que o campo já diz. */
+.topbar-lugares .field-topo > .hint{
+  position:absolute;left:0;right:0;top:100%;margin:1px 0 0;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.topbar-linha-1{padding-bottom:13px}        /* espaço para as legendas */
+
+.topbar-linha-2{gap:14px}
+.orcamento{flex-direction:row;align-items:center;gap:12px}
+.orcamento-rotulo{flex:none;font-size:10.5px;text-align:left}
+.orcamento-valor{flex-direction:row;align-items:center;gap:8px;width:auto}
+.orcamento-valor .money{width:118px}
+.orcamento-valor .money input{padding-top:5px;padding-bottom:5px;font-size:16px}
+.orcamento-valor .hint{text-align:left;font-size:10px;white-space:nowrap}
+.seg-moeda .seg-btn{padding:4px 9px;font-size:11.5px}
+.topbar .icon-btn{width:26px;height:26px;font-size:12px}
+
+/* ---- lateral: campos mais baixos, menos ar entre eles ---- */
+.sidebar .panel{padding:12px 12px 4px}
+.sidebar .field{margin-bottom:11px}
+.sidebar label{font-size:11px;margin-bottom:4px}
+.sidebar input,.sidebar select{padding:6px 10px;font-size:13px}
+.sidebar .seg-btn{padding:5px 8px;font-size:11.5px}
+.sidebar .hint{font-size:10px;line-height:1.35;margin-top:4px}
+.sidebar .grid-2{gap:8px}
+.quando-bloco{margin-bottom:2px}
+/* O anúncio da lateral não precisa de 250 px de altura reservados enquanto
+   não existe anúncio nenhum: isso empurrava o formulário para fora da tela. */
+.sidebar .ad-slot{min-height:180px;margin:10px 12px 12px}
+
+/* ---- barra inferior: mesma informação, menos moldura ---- */
+.details-body{padding:0 14px 14px}
+.dgrid{gap:14px}
+.dcol h4{font-size:10px;margin-bottom:7px;padding-bottom:5px}
+.resumo-linha{padding-bottom:8px;margin-bottom:10px;gap:14px}
+.resumo-saldo{font-size:12px}
+.resumo-saldo b{font-size:14px}
+.conexao.duas-opcoes{gap:10px}
+.conexao.duas-opcoes .caminho{padding:9px 11px}
+.conexao-preco{font-size:19px}
+.conexao-head{gap:10px}
+.perna{font-size:11.5px}
+.opt{padding:7px 9px;margin-bottom:5px}
+.opt-price{font-size:17px}
+.ad-strip{margin:12px 0 2px;padding-top:12px}
+.ad-strip .ad-slot{min-height:86px}
+
+/* O aviso legal é longo e é lido uma vez: em corpo menor e duas colunas ele
+   deixa de disputar altura com os voos, sem sair da tela. */
+/* O aviso é longo e é lido uma vez. Em resumo de uma linha ele continua sempre
+   à vista — o que a lei pede —, e o texto inteiro fica a um clique, sem cobrar
+   100 px de altura do mapa em toda visita. */
+.aviso-legal{
+  font-size:10px;line-height:1.5;padding:7px 14px;color:var(--txt-faint);
+  border-top:1px solid var(--line-soft);
+}
+.aviso-legal summary{
+  cursor:pointer;list-style:none;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+}
+.aviso-legal summary::-webkit-details-marker{display:none}
+.aviso-legal summary i{color:var(--accent);font-style:normal;font-weight:600}
+.aviso-legal[open] summary{white-space:normal}
+.aviso-legal[open] summary i{display:none}
+.aviso-legal p{margin:6px 0 0}
+.aviso-legal b{color:var(--txt-dim)}
+
+/* ---- linhas de voo: a maior conta de altura da barra ----
+   Três trechos a 45 px somavam 135 px, mais que o dobro do cabeçalho do card.
+   Cada linha carrega três dados curtos (rota, horário, preço) e não precisa de
+   altura de botão: em 34 px continuam clicáveis, e os 33 px economizados são a
+   diferença entre caber e obrigar a rolar. */
+a.perna.is-link{padding:4px 8px}
+.perna{gap:6px;font-size:11.5px}
+.perna-seta{line-height:1.35;padding-left:12px}
+.conexao-bloco{display:flex;flex-direction:column;gap:1px}
+.conexao-rot{margin-top:4px}
+.conexao-nota{margin-top:5px}
+.trecho{padding:3px 0}

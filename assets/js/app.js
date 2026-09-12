@@ -53,6 +53,7 @@ const state = {
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
   originAirports: [],     // até 3 aeroportos de partida, por distância
+  enquadrePontos: null,   // trajeto do último enquadramento, para repeti-lo
   quando: 'duracao',      // como as datas são informadas: duracao | datas
   dataIda: '',            // modo datas: dia da ida (AAAA-MM-DD)
   dataVolta: '',          // modo datas: dia da volta, vazio = em aberto
@@ -180,27 +181,45 @@ function fixarCaminho(destId, pontos) {
  * enquadramento — e como a barra inferior se abre ao mesmo tempo, o destino
  * ainda podia ficar escondido atrás dela.
  */
-function enquadrarTrajeto(pontos) {
+function enquadrarTrajeto(pontos, { animar = true } = {}) {
   if (!map || !pontos || pontos.length < 2) return;
   const validos = pontos.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
   if (validos.length < 2) return;
 
+  // Guardado para poder repetir o enquadramento quando a barra inferior mudar
+  // de altura: o mapa encolhe e o trajeto que estava enquadrado sai da vista.
+  state.enquadrePontos = validos;
+
   clearTimeout(enquadreTimer);
   enquadreTimer = setTimeout(() => {
+    // Sem isto o Leaflet ainda acha que o mapa tem a altura de antes da barra
+    // abrir, e enquadra para um retângulo que não existe mais — era por isso
+    // que a ponta do arco ficava escondida atrás dos cards.
+    map.invalidateSize({ animate:false });
+
     const limites = L.latLngBounds(validos.map(p => [p.lat, p.lon]));
     // o mapa vai se mexer por nossa conta: os eventos que isso gera não devem
     // ser lidos como "a pessoa navegou"
     state.ignorarMoveAte = Date.now() + 1500;
     map.fitBounds(limites, {
-      paddingTopLeft: [60, 60],
-      paddingBottomRight: [60, 40],
+      paddingTopLeft: [70, 70],
+      paddingBottomRight: [70, 70],
       maxZoom: 7,
-      animate: true,
+      animate: animar,
       duration: 0.6,
     });
-  }, 120);   // espera a barra inferior terminar de abrir
+  }, 140);
 }
 let enquadreTimer;
+
+/** Reenquadra o trajeto aberto, se houver, depois de o mapa mudar de tamanho. */
+function reenquadrarSeNecessario() {
+  if (state.selected && state.enquadrePontos) {
+    enquadrarTrajeto(state.enquadrePontos, { animar:false });
+  } else if (map) {
+    map.invalidateSize({ animate:false });
+  }
+}
 
 /**
  * Desenha um trajeto passando por todas as paradas informadas.
@@ -1918,7 +1937,16 @@ function setupForm() {
     const open = d.dataset.state === 'open';
     d.dataset.state = open ? 'collapsed' : 'open';
     $('#detailsHandle').setAttribute('aria-expanded', String(!open));
-    setTimeout(() => map.invalidateSize(), 260);
+    // recolher devolve altura ao mapa, abrir tira: nos dois casos o trajeto
+    // precisa ser reenquadrado no retângulo novo
+    setTimeout(reenquadrarSeNecessario, 260);
+  });
+
+  // Mudar o tamanho da janela muda o retângulo do mapa pelo mesmo motivo.
+  let redimTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(redimTimer);
+    redimTimer = setTimeout(reenquadrarSeNecessario, 200);
   });
 
   $('#btnHelp').addEventListener('click', () => $('#helpDialog').showModal());
@@ -1958,6 +1986,10 @@ function ajustarAlturaAoConteudo() {
   // setTimeout e não requestAnimationFrame: rAF fica parado com a aba em
   // segundo plano e a barra nunca se ajustaria.
   setTimeout(() => {
+    // Recolhida, o corpo tem altura 0 e a medição vira lixo: o teto sai
+    // negativo, cai no mínimo, e a altura guardada do destino aberto se perde —
+    // reabrir a barra devolvia 150 px em vez do tamanho que ela tinha.
+    if ($('#details').dataset.state !== 'open') return;
     const grade = corpo.querySelector('.dgrid');
     if (!grade) return;
     const base = corpo.getBoundingClientRect().top;
@@ -1968,21 +2000,35 @@ function ajustarAlturaAoConteudo() {
     let piso = 0;
     try { piso = +localStorage.getItem('ppi.detailsH') || 0; } catch {}
 
-    const teto = Math.round(window.innerHeight * 0.62);
-    const alvo = Math.max(piso, Math.min(precisa + 6, teto));
+    // O teto sai de uma regra sobre o MAPA, não sobre a barra: o mapa é o
+    // produto e tem um tamanho abaixo do qual deixa de servir. Antes o limite
+    // era uma fração do corpo da barra e ignorava a alça e o aviso — num
+    // monitor de 720 px a barra chegou a 593 px e sobraram 23 px de mapa.
+    const barra = $('#details');
+    const extras = barra.offsetHeight - corpo.clientHeight;   // alça + aviso + bordas
+    const topo = document.querySelector('.topbar')?.offsetHeight || 0;
+    const mapaMinimo = Math.max(260, Math.round(window.innerHeight * 0.3));
+    const teto = Math.max(ALTURA_MIN, window.innerHeight - topo - mapaMinimo - extras);
+
+    const alvo = Math.max(Math.min(piso, teto), Math.min(precisa + 6, teto));
     if (alvo <= corpo.clientHeight + 4) return;
     aplicarAltura(alvo);
-    map.invalidateSize();
   }, 60);
 }
 
 const ALTURA_MIN = 150;
-const alturaMax = () => Math.round(window.innerHeight * 0.8);
+// Arrastando a alça a pessoa manda, mas nem ela deve conseguir apagar o mapa:
+// 72% ainda deixa uma faixa navegável.
+const alturaMax = () => Math.round(window.innerHeight * 0.72);
 
 function aplicarAltura(px, { salvar = false } = {}) {
   const h = Math.round(Math.min(alturaMax(), Math.max(ALTURA_MIN, px)));
+  const antes = getComputedStyle(document.documentElement).getPropertyValue('--details-h');
   document.documentElement.style.setProperty('--details-h', h + 'px');
   if (salvar) { try { localStorage.setItem('ppi.detailsH', h); } catch {} }
+  // A barra roubou (ou devolveu) altura do mapa: o trajeto precisa caber no
+  // retângulo novo, senão some atrás dos cards.
+  if (antes.trim() !== h + 'px') setTimeout(reenquadrarSeNecessario, 40);
   return h;
 }
 

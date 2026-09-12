@@ -687,8 +687,12 @@ possibilidades, não como garantia.
 
 ## A ordem dos passos na tela
 
-O mapa é o fundo da página; a barra superior e a lateral pairam sobre ele. A
-disposição segue a ordem em que a pessoa decide, não a ordem em que os campos
+Cada região tem o seu espaço — nada fica por cima do mapa. A versão flutuante
+foi testada e descartada: a barra e a lateral escondiam justamente os destinos
+mais próximos da origem, que são os que mais interessam, e as caixas grandes
+deixavam o mapa com menos de um terço da tela.
+
+A disposição segue a ordem em que a pessoa decide, não a ordem em que os campos
 existem:
 
 1. **Barra superior, primeira linha** — de onde sai e (opcional) para onde quer
@@ -710,14 +714,52 @@ pintada por um gradiente cujo ponto de virada vem de `--pct`, escrito pelo JS a
 cada movimento: um `input[type=range]` nativo pinta o trilho inteiro de uma cor
 só, não há como fazer isso em CSS puro.
 
-`--topbar-h` é medido em tempo real por um `ResizeObserver`. A barra muda de
-altura sozinha (a dica sob a origem passa de "digite 3 letras" para "Itália ·
-detectado pelo IP", os campos embrulham em telas estreitas), e a lateral e os
-avisos do mapa se posicionam a partir dela. Com um valor fixo no CSS, ora
-sobrava um vão, ora a lateral entrava por baixo.
+### Densidade
 
-Abaixo de 880 px nada flutua: barra e lateral voltam a ser blocos empilhados e
-o mapa fica entre eles.
+A primeira versão desta tela tinha informação boa em caixas grandes demais: a
+barra de cima sozinha ocupava 190 px e a lateral 312 px, e o mapa — que é o
+produto — ficava espremido entre as duas.
+
+| | Antes | Agora |
+|---|---|---|
+| Barra superior | 190 px | **104 px** |
+| Lateral | 312 px | **258 px** |
+| Linha de voo nos cards | 45 px | **34 px** |
+| Aviso legal | ~100 px | **31 px** (resumo + expansor) |
+
+O que encolheu foi a moldura, não a informação. Os rótulos da barra de cima
+passaram a ficar **ao lado** dos campos em vez de acima, e as dicas viraram
+legenda fora do fluxo — no fluxo elas cobravam a altura de um campo inteiro para
+repetir o que o campo já dizia. O aviso legal virou um resumo de uma linha,
+sempre à vista, com o texto completo a um clique.
+
+`--topbar-h` é medido em tempo real por um `ResizeObserver`, porque a barra muda
+de altura sozinha (a dica sob a origem passa de "digite 3 letras" para "Itália ·
+detectado pelo IP"). Abaixo de 880 px os blocos empilham.
+
+### O mapa tem um tamanho mínimo
+
+O teto da barra inferior sai de uma regra sobre o **mapa**, não sobre a barra:
+
+```js
+const mapaMinimo = Math.max(260, window.innerHeight * 0.3);
+const teto = window.innerHeight - topbar - mapaMinimo - extras;
+```
+
+Antes o limite era uma fração do corpo da barra e ignorava a alça e o aviso
+legal, que somam mais de 100 px. Num monitor de 720 px a barra chegou a **593 px
+e sobraram 23 px de mapa** — o produto desaparecia para caber o detalhe.
+
+Duas armadilhas que isso expôs:
+
+- **O Leaflet precisa ser avisado.** Abrir a barra encolhe o mapa, mas
+  `fitBounds` continuava enquadrando para o retângulo antigo — era por isso que
+  a ponta do arco ficava escondida atrás dos cards. `map.invalidateSize()` vem
+  antes de todo enquadramento, e o trajeto é reenquadrado sempre que a barra
+  muda de altura, alterna aberta/recolhida ou a janela é redimensionada.
+- **Recolhida, o corpo mede zero.** A conta do teto saía negativa, caía no
+  mínimo e apagava a altura do destino aberto: reabrir a barra devolvia 150 px
+  em vez do tamanho que ela tinha. A medição agora só roda com a barra aberta.
 
 ## A barra lateral é só o formulário
 
