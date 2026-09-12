@@ -2,7 +2,7 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS, TAG_LABELS } from './data/destinations.js';
+import { DESTINATIONS } from './data/destinations.js';
 import { searchLocal, searchRemote, norm } from './data/origins.js';
 import * as GEO from './data/geo.js';
 import { ligadosPorTerra } from './data/landmass.js';
@@ -32,10 +32,8 @@ const state = {
   days: 7,
   people: 1,
   month: new Date().getMonth(),
-  style: 1,
+  style: 0,               // econômico: o site existe para achar viagem barata
   mode: 'flight',                    // flight | both | stay — começa só no voo
-  tags: [],
-  maxHours: null,
   sortBy: 'fit',
   results: [],
   selected: null,
@@ -425,8 +423,8 @@ function search({ refit = true } = {}) {
   setTimeout(() => {
     state.results = rankDestinations(state.origin, DESTINATIONS, {
       days: state.days, people: state.people, month: state.month, style: state.style,
-      mode: state.mode, budgetEUR: budgetEUR(), tags: state.tags,
-      maxHours: state.maxHours, sortBy: state.sortBy, realFares: state.realFares,
+      mode: state.mode, budgetEUR: budgetEUR(),
+      sortBy: state.sortBy, realFares: state.realFares,
       filtro: state.filtro, viaEscala: state.viaEscala, bounds: areaVisivel(),
       manterId: state.selected,
     });
@@ -1673,29 +1671,6 @@ function setupForm() {
     state.mode = b.dataset.mode;
     search({ refit:false });
   }));
-
-  // tempo máximo de voo
-  const mh = $('#maxFlight');
-  mh.addEventListener('input', () => {
-    const v = +mh.value;
-    state.maxHours = v >= 25 ? null : v;
-    $('#maxFlightLabel').textContent = state.maxHours ? `até ${v} h` : 'sem limite';
-    debouncedSearch();
-  });
-
-  // tipo de destino
-  const chips = $('#tagChips');
-  Object.entries(TAG_LABELS).forEach(([tag, label]) => {
-    const c = el('button', 'chip', label);
-    c.type = 'button';
-    c.addEventListener('click', () => {
-      const i = state.tags.indexOf(tag);
-      i < 0 ? state.tags.push(tag) : state.tags.splice(i, 1);
-      c.classList.toggle('is-active', i < 0);
-      search();
-    });
-    chips.appendChild(c);
-  });
 
   // botões do mapa: clicar no que já está ligado volta a mostrar tudo
   const alterna = modo => () => {

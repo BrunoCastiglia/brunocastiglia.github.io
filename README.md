@@ -19,6 +19,9 @@ com **preço real de voo** onde ele existe.
   — marcado com ★ dourado. O resto é estimativa, e a tela diz qual é qual.
 - **Voo + hospedagem, só voo ou só hospedagem** — comida e passeios ficam de
   fora de propósito: variam demais de pessoa para pessoa.
+- **Estilo econômico por padrão** (hostel, voo low cost): o site existe para
+  achar viagem barata, e começar por hotel 3★ escondia destinos que cabiam.
+  Alghero saindo de Olbia é € 202 no econômico e € 524 no equilibrado.
 - **Caminhos alternativos**: voo direto de um aeroporto vizinho, destino vizinho
   com voo direto, ou trajeto com escala pela malha da companhia.
 - **Busca pela área do mapa**: arrastou, procurou de novo só no que está à vista.

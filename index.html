@@ -111,26 +111,12 @@
       <div class="field">
         <label>Estilo de viagem</label>
         <div class="seg seg-wide" role="group">
-          <button type="button" class="seg-btn" data-style="0">Econômico</button>
-          <button type="button" class="seg-btn is-active" data-style="1">Equilibrado</button>
+          <button type="button" class="seg-btn is-active" data-style="0">Econômico</button>
+          <button type="button" class="seg-btn" data-style="1">Equilibrado</button>
           <button type="button" class="seg-btn" data-style="2">Conforto</button>
         </div>
-        <p class="hint" id="styleHint">Hotel/apartamento simples, comer fora sem exageros.</p>
+        <p class="hint" id="styleHint">Hostel ou quarto compartilhado; voo low cost, só bagagem de mão.</p>
       </div>
-
-      <details class="advanced">
-        <summary>Filtros avançados</summary>
-
-        <div class="field">
-          <label for="maxFlight">Tempo máximo de voo: <b id="maxFlightLabel">sem limite</b></label>
-          <input type="range" id="maxFlight" min="1" max="25" step="1" value="25">
-        </div>
-
-        <div class="field">
-          <label>Tipo de destino</label>
-          <div class="chips" id="tagChips"></div>
-        </div>
-      </details>
 
       <button type="submit" class="btn-primary" id="btnSearch">Encontrar destinos</button>
     </form>
