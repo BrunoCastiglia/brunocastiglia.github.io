@@ -1101,3 +1101,24 @@ a.perna.is-link{padding:4px 8px}
 .conexao-rot{margin-top:4px}
 .conexao-nota{margin-top:5px}
 .trecho{padding:3px 0}
+
+/* ============ FOCO NO TRAJETO ==========================================
+   Com um destino aberto, cem pílulas de preço disputam atenção com a única
+   que a pessoa está lendo. O mapa fica com o trajeto, as duas pontas e mais
+   nada — e o arco, que antes se perdia no meio dos pinos, passa a ser a
+   figura óbvia da tela.
+
+   Some por opacidade e não por display:none: o pino continua ocupando o seu
+   lugar, então sair do foco não recalcula nada nem faz o mapa piscar. */
+.map-wrap.foco .pin:not(.is-selected):not(.pin-origin){
+  opacity:0;pointer-events:none;transition:opacity .25s ease;
+}
+.map-wrap .pin{transition:opacity .25s ease, transform .12s}
+
+/* A legenda explica cores de pinos que não estão mais na tela. */
+.map-wrap.foco .map-legend{opacity:0;pointer-events:none;transition:opacity .25s}
+.map-legend{transition:opacity .25s}
+
+/* Sem a concorrência, o destino escolhido pode crescer um pouco e ficar
+   claramente "o" ponto da vez. */
+.map-wrap.foco .pin.is-selected{transform:translate(-50%,-50%) scale(1.12)}

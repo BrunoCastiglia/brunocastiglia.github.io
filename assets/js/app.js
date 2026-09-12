@@ -130,6 +130,11 @@ function criarCamadaDeRota() {
     if (!state.selected) svgRota?.classList.remove('is-on', 'is-conexao');
   });
   map.on('moveend zoomend', () => { if (state.selected) desenharRotaFixa(); });
+
+  // Clicar em qualquer lugar vazio do mapa desfaz a seleção. O Leaflet só
+  // dispara 'click' no mapa quando o clique NÃO foi num marcador, então clicar
+  // noutro destino continua trocando de destino em vez de limpar.
+  map.on('click', () => { if (state.selected || state.destinoAlvo) limparSelecao(); });
 }
 
 /**
@@ -357,6 +362,11 @@ function paintSelection() {
     const node = m.getElement()?.firstElementChild;
     if (node) node.classList.toggle('is-selected', id === state.selected);
   }
+  // Com um trajeto escolhido, o resto do mapa vira ruído: cem pílulas de preço
+  // disputando atenção com a única que a pessoa está lendo. Quem esconde é o
+  // CSS, a partir desta classe — assim vale também para os pinos que a busca
+  // redesenhar enquanto a seleção estiver de pé.
+  $('.map-wrap')?.classList.toggle('foco', !!state.selected);
   if (routeLine) { routeLine.remove(); routeLine = null; }
   const r = state.results.find(x => x.dest.id === state.selected);
   if (r && state.origin) {
@@ -730,7 +740,7 @@ function limparSelecao() {
   if (state.destinoAlvo) limparDestino();
   clearDetails({ forcar:true });
   desenharRotaFixa();
-  paintSelection();
+  paintSelection();          // também tira o foco e devolve os outros destinos
   pintarBotaoLimpar();
   setTimeout(() => map.invalidateSize(), 260);
 }
@@ -1935,6 +1945,12 @@ function setupForm() {
   $('#detailsHandle').addEventListener('click', () => {
     const d = $('#details');
     const open = d.dataset.state === 'open';
+
+    // Recolher a barra com um destino aberto é a mesma intenção de limpar: a
+    // pessoa quer o mapa de volta. Deixar a seleção de pé mantinha o arco e os
+    // outros destinos escondidos, sem nada na tela explicando por quê.
+    if (open && state.selected) return limparSelecao();
+
     d.dataset.state = open ? 'collapsed' : 'open';
     $('#detailsHandle').setAttribute('aria-expanded', String(!open));
     // recolher devolve altura ao mapa, abrir tira: nos dois casos o trajeto

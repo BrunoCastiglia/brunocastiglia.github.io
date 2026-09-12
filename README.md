@@ -651,6 +651,22 @@ que sobraram são aeroportos regionais sem destino turístico próprio.
 Vale repetir esse cruzamento sempre que a malha mudar — o script está no
 histórico e leva segundos.
 
+## Foco no trajeto
+
+Com um destino aberto, o mapa fica com **o trajeto, as duas pontas e mais nada**.
+Cem pílulas de preço disputando atenção com a única que a pessoa está lendo é
+ruído, e o arco se perdia no meio delas.
+
+Quem esconde é o CSS, a partir de uma classe `.foco` no `.map-wrap` — assim vale
+também para os pinos que a busca redesenhar enquanto a seleção estiver de pé. E
+some por **opacidade**, não por `display:none`: o pino continua ocupando o seu
+lugar, então sair do foco não recalcula nada nem faz o mapa piscar. A legenda
+some junto: ela explica cores de pinos que não estão mais na tela.
+
+Como os outros destinos ficam sem `pointer-events`, trocar de destino é um clique
+a mais: limpa primeiro, escolhe depois. É o preço de o clique no mapa significar
+sempre a mesma coisa.
+
 ## Sair da seleção
 
 Fechar a barra pelo cabeçalho só a recolhia: o destino seguia escolhido, o arco
@@ -658,10 +674,18 @@ continuava desenhado e o pino, destacado. Voltar a "olhar o mapa inteiro" exigia
 clicar em outro lugar qualquer — um jeito de sair que a pessoa descobre por
 acidente, não por desenho.
 
-O botão **✕ Limpar seleção** aparece no mapa junto dos filtros, em cinza: é uma
-saída, não mais um filtro, e competir em cor com o dourado e o verde faria ser
-lido como um. Ele desfaz a seleção, apaga o arco, recolhe a barra e some sozinho
-quando não há nada a limpar. **Esc** faz o mesmo.
+São quatro os jeitos de sair, todos com o mesmo efeito:
+
+- **clicar em qualquer ponto vazio do mapa** — o Leaflet só dispara `click` no
+  mapa quando o clique não foi num marcador, então clicar noutro destino
+  continua trocando de destino, e **arrastar o mapa não limpa nada**;
+- o botão **✕ Limpar seleção**, no mapa junto dos filtros, em cinza: é uma
+  saída, não mais um filtro, e competir em cor com o dourado e o verde faria ser
+  lido como um;
+- **retrair a barra inferior** — recolhê-la com um destino aberto é a mesma
+  intenção: a pessoa quer o mapa de volta. Deixar a seleção de pé mantinha o
+  arco e os outros destinos escondidos, sem nada na tela explicando por quê;
+- **Esc**.
 
 O formulário não é tocado — origem, orçamento e datas são o contexto da pessoa,
 não a seleção. Só o destino digitado sai junto, porque é ele que prende o mapa a
