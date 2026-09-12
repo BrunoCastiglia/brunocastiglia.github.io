@@ -1,18 +1,27 @@
 /* ==========================================================================
    Anúncios (Google AdSense)
    --------------------------------------------------------------------------
-   Enquanto ENABLED for false, os espaços aparecem como caixas tracejadas —
-   útil para conferir o layout sem violar as regras do AdSense.
+   O script do AdSense já está no <head> do index.html, com o ID de publisher
+   real. Ele sozinho basta para a revisão do site e para os anúncios
+   automáticos, que se ligam no painel do AdSense e não aqui.
 
-   Para ativar:
-   1. Cadastre o site em adsense.google.com e espere a aprovação.
-   2. Descomente a tag <script> do AdSense no <head> do index.html.
-   3. Preencha CLIENT e os SLOTS abaixo e mude ENABLED para true.
+   Os blocos MANUAIS (o retângulo da lateral e os três da faixa inferior)
+   dependem de IDs de bloco, que só existem depois de você criar cada bloco em
+   AdSense → Anúncios → Por unidade de anúncio. Cada bloco criado devolve um
+   número de 10 dígitos: é ele que entra em SLOTS.
+
+   Enquanto ENABLED for false, esses quatro espaços aparecem como caixas
+   tracejadas — dá para conferir o layout sem servir anúncio nenhum.
+
+   Para ligar os blocos manuais:
+   1. crie os quatro blocos no painel do AdSense;
+   2. cole os números em SLOTS;
+   3. mude ENABLED para true.
    ======================================================================== */
 
 export const ADS = {
   ENABLED: false,
-  CLIENT: 'ca-pub-XXXXXXXXXXXXXXXX',
+  CLIENT: 'ca-pub-8514640441352876',
   SLOTS: {
     sidebar: '0000000000',   // retângulo 300x250 na barra lateral
     strip1:  '0000000000',   // faixa inferior, bloco 1

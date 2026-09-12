@@ -1019,9 +1019,11 @@ não é código:
 |---|---|
 | Espaços e montagem | **pronto** |
 | Anúncio nunca montado em elemento oculto | **pronto** |
-| Política de privacidade | **falta** — o AdSense exige |
-| CMP de consentimento (EEA/Reino Unido) | **falta** — obrigatório desde jan/2024 |
-| `ads.txt` na raiz do domínio | **falta** |
+| Política de privacidade | **pronto** — `privacidade.html` |
+| Script do AdSense na página | **pronto** — `ca-pub-8514640441352876` |
+| `ads.txt` na raiz do domínio | **pronto** |
+| Blocos manuais (IDs de bloco) | **falta** — criar no painel |
+| CMP de consentimento (EEA/Reino Unido) | **falta** — no painel, não no código |
 | Conteúdo suficiente para aprovação | **risco** |
 
 **Política de privacidade.** É exigência do AdSense: precisa dizer que terceiros
@@ -1034,11 +1036,20 @@ para tráfego do Espaço Econômico Europeu e do Reino Unido. Sem ela o Google
 simplesmente não serve anúncios a esses usuários — que é justamente o público
 deste site.
 
-**`ads.txt`.** Tem de ficar na raiz do domínio: `brunocastiglia.github.io/ads.txt`.
-Como o site mora num caminho de projeto (`/moneytogo/`), um arquivo neste
-repositório vai parar em `/moneytogo/ads.txt`, onde nenhum rastreador procura. É
-preciso um repositório `brunocastiglia.github.io` só para isso — ou um domínio
-próprio, que resolve isso e ajuda na aprovação.
+**`ads.txt`.** Tem de ficar na raiz do domínio, e por isso vive no repositório
+[`brunocastiglia.github.io`](https://github.com/BrunoCastiglia/brunocastiglia.github.io),
+não neste. Como o site mora num caminho de projeto (`/moneytogo/`), um arquivo
+aqui iria parar em `/moneytogo/ads.txt`, onde nenhum rastreador procura, e a
+raiz de um domínio `usuario.github.io` só pode ser servida por um repositório
+com esse nome exato. Um domínio próprio resolveria isso num repositório só — e
+ajuda na aprovação, que costuma olhar torto para subdomínio de `github.io`.
+
+**Automáticos x manuais.** O script sozinho já habilita os anúncios automáticos,
+que o Google injeta onde quiser — em `<body>`, no caso desta página. Num
+layout de aplicativo, com `overflow:hidden` e painéis de altura fixa, isso
+tende a dar anúncio cortado ou fora de lugar. Os quatro espaços manuais
+(lateral e faixa inferior) foram postos onde cabem de fato; vale desligar os
+automáticos no painel e ficar só com eles.
 
 **Conteúdo.** A revisão do AdSense procura conteúdo original e substancial. Uma
 página única de ferramenta costuma ser recusada como "conteúdo de pouco valor".
