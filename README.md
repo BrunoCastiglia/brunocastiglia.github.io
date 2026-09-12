@@ -154,7 +154,7 @@ O site foi reorganizado em torno de um orçamento:
 | Abertura (por origem/mês/dias) | **21** — consulta geral das 5 saídas + rede de escalas |
 | Navegando o mapa | até 4 países por movimento, cada um só uma vez |
 | Abrir um destino | **2** — confere se existe voo direto para ele |
-| Procurar caminhos | ~12, só ao clicar no botão, guardada por destino |
+| Sem voo direto | ~20 — procura os outros caminhos, guardada por destino |
 
 Essa consulta de 2 requisições ao abrir um destino é o contrapeso da varredura
 por região: sem ela, o Porto tinha voo direto de Cagliari e ficava marcado como
@@ -170,7 +170,10 @@ O que segura isso:
   temporário em bloqueio longo.
 - **Varredura por região**: em vez de varrer a Europa inteira na abertura (66
   requisições), o site pede só os países que entraram na tela.
-- **Sob demanda**: caminhos alternativos só quando a pessoa aperta o botão.
+- **Atraso curto**: a busca de caminhos espera 700 ms com o destino aberto
+  antes de disparar. Passear pelo mapa clicando em vários destinos não consome
+  nada; só o que fica aberto é consultado. Um botão para pedir a busca chegou a
+  ser testado, mas quem abre um destino quer a resposta, não mais um clique.
 - **Cache**: tarifas 12 h, rotas e aeroportos 30 dias, tudo em `localStorage`.
 
 Com a API fora do ar o site continua funcionando: mostra as estimativas e avisa

@@ -919,7 +919,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
         total: direto.price + terra.preco,
       });
     }
-    if (achados.length >= 1) break;          // um candidato bom já resolve
+    if (achados.length >= 2) break;          // compara dois candidatos
   }
 
   if (!achados.length) return null;
@@ -964,13 +964,18 @@ async function prepararBuscaDeCaminhos(r) {
       aguarde alguns minutos e tente de novo</span>`;
     return;
   }
-  caixa.innerHTML = `
-    <button type="button" class="procurar-caminhos" id="btnCaminhos">
-      <b>Não há voo direto até aqui</b>
-      <span>Procurar caminhos: voo + ônibus, ou escala pela malha da companhia</span>
-    </button>`;
-  $('#btnCaminhos').addEventListener('click', () => buscarConexao(r), { once:true });
+
+  // Sem voo direto, procuramos os outros caminhos automaticamente: quem abriu
+  // um destino quer a resposta, não um botão. O que evita o desperdício é o
+  // atraso curto abaixo — passar o mouse por vários destinos em sequência não
+  // dispara busca nenhuma, só o que ficar aberto dispara.
+  caixa.innerHTML = '<span class="conexao-load">procurando caminhos até aqui…</span>';
+  clearTimeout(caminhosTimer);
+  caminhosTimer = setTimeout(() => {
+    if (state.selected === r.dest.id) buscarConexao(r);
+  }, 700);
 }
+let caminhosTimer;
 
 /**
  * Confere se alguma das saídas próximas tem voo direto para este destino.
@@ -1079,7 +1084,7 @@ async function buscarConexao(r) {
  */
 async function buscarEscala(r, ordem, destApt, signal) {
   const achadas = [];
-  for (const partida of ordem.slice(0, 1)) {     // uma saída basta
+  for (const partida of ordem.slice(0, 2)) {     // compara as duas mais próximas
     if (partida.iata === destApt.iata) continue;
     const achada = await RYA.findConnection(
       partida, destApt, state.airports, state.month, state.days, signal,

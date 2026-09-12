@@ -479,7 +479,7 @@ export async function findConnection(origin, dest, airports, month, days, signal
     })
     .filter(Boolean)
     .sort((a, b) => a.desvio - b.desvio)
-    .slice(0, 1);          // só o hub de menor desvio
+    .slice(0, 2);          // os dois hubs de menor desvio
 
   if (!candidatos.length) return null;
 
@@ -500,10 +500,13 @@ export async function findConnection(origin, dest, airports, month, days, signal
      (aeroporto vizinho, ou voo até perto e o resto por terra). */
   // Duas janelas em vez de três: cada uma é uma consulta a mais por perna, e
   // 12 h já cobre a conexão confortável no mesmo dia.
-  // Uma janela só. Cada janela extra é outra consulta por perna, multiplicada
-  // por candidatos, ida e volta — foi assim que uma busca passou de cem
-  // requisições e a companhia começou a recusar.
-  const JANELAS = [{ ateH: 28, tipo:'pernoite' }];
+  // Duas janelas: a conexão confortável no mesmo dia e a que exige pernoite.
+  // Cortar para uma só economizava pouco e fazia o site não achar escala
+  // nenhuma em destinos que têm — o remédio virou pior que a doença.
+  const JANELAS = [
+    { ateH: 12, tipo:'mesmo-dia' },
+    { ateH: 28, tipo:'pernoite'  },
+  ];
 
   const somaHoras = (iso, h) =>
     new Date(new Date(iso).getTime() + h * 3600e3).toISOString().slice(0, 19);
