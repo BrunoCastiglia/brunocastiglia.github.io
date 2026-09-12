@@ -416,6 +416,24 @@ aí a sua escolha manda.
 > No mapa, ★ cheia é preço confirmado e ☆ vazada é "tem voo direto, preço a
 > consultar". De Olbia isso levou o filtro de 30 para **41 destinos**.
 
+### Por que alguns voos diretos vêm sem preço
+
+**A API devolve no máximo 20 ofertas por consulta.** Cagliari sozinha serve 42
+rotas: pedindo as tarifas do aeroporto, vêm as 20 mais baratas e as outras 22
+ficam de fora. Pedir com `arrivalCountryCode` traz até 20 daquele país — ajuda,
+mas o teto é o mesmo.
+
+Na prática, depois da consulta geral mais oito países, a cobertura fica em
+**~80% dos destinos diretos**. Ampliar de oito para catorze países não mudou
+nada (os que faltam não estão entre os 20 mais baratos do próprio país), só
+gastava mais requisições.
+
+Os ~20% restantes só são alcançáveis pedindo o **par exato**
+(`arrivalAirportIataCode`), o que custa duas consultas por destino. Fazer isso
+para todos seria voltar ao volume que nos bloqueou, então é feito quando a
+pessoa abre o destino: ela vê ☆ no mapa, abre, e o preço chega. Paga-se só pelo
+que é olhado.
+
 Dentro do mapa há dois botões, com a contagem de cada um:
 
 - **★ Só preço confirmado** — destinos com voo direto **ou** alcançáveis com uma

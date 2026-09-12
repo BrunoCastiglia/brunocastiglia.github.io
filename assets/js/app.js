@@ -554,7 +554,38 @@ async function loadRealFares() {
 
     if (!acumulado.size) { state.realFares = new Map(); return setFareStatus('none'); }
 
-    // Rede de escalas das três saídas, para o filtro do mapa.
+    // Completa o preço dos destinos que têm voo direto e ficaram sem.
+    //
+    // A consulta geral devolve no máximo 20 ofertas por aeroporto, mas
+    // Cagliari sozinha serve 42 rotas: metade dos destinos diretos ficava só
+    // com estimativa. Consultar por país traz até 20 de cada país e cobre o
+    // resto. Oito países bastam: a consulta por país também devolve no máximo
+    // 20 ofertas, então ampliar para catorze não mudou a cobertura (78% dos
+    // dois jeitos) e só gastava mais. Os destinos que sobram ficam marcados com
+    // ☆ no mapa e têm o preço buscado quando a pessoa os abre — duas consultas
+    // pelo par exato, que é o único jeito de alcançá-los.
+    const porPais = new Map();
+    for (const id of diretos) {
+      if (state.realFares.has(id)) continue;
+      const cc = DESTINATIONS.find(d => d.id === id)?.cc?.toLowerCase();
+      if (cc) porPais.set(cc, (porPais.get(cc) || 0) + 1);
+    }
+    const prioritarios = [...porPais.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([cc]) => cc);
+
+    for (const cc of prioritarios) {
+      if (signal.aborted || RYA.estaBloqueado()) break;
+      paisesJaVistos.add(cc);
+      for (const saida of saidas.slice(0, 2)) {
+        const novas = await RYA.fetchFares(saida.iata, state.month, state.days, signal, cc);
+        if (novas.size) juntar(novas, saida);
+      }
+      aplicar();
+    }
+
+    // Rede de escalas das saídas mais próximas, para o filtro do mapa.
     const alcanceTotal = new Map();
     for (const saida of saidas.slice(0, 2)) {
       const alcance = await RYA.reachableWithStop(saida.iata, signal, parcial => {
@@ -820,9 +851,11 @@ function renderDetails(r) {
         <div class="conexao" id="conexaoBox" hidden></div>
         ${flights.map(optRow).join('')}
         ${(!r.real && !r.useGround) ? `
-          <p class="sem-confirmado" id="semConfirmado">
-            Sem preço confirmado para esta rota. O valor de <b>${fmt(r.flight || r.airPP)}</b>
-            no resumo é estimativa de planejamento — confira na busca ao lado.
+          <p class="sem-confirmado" id="semConfirmado">${r.voaDireto
+            ? `Este destino <b>tem voo direto</b> da companhia — estamos buscando o preço.
+               O valor de ${fmt(r.flight || r.airPP)} no resumo é estimativa até ele chegar.`
+            : `Sem preço confirmado para esta rota. O valor de <b>${fmt(r.flight || r.airPP)}</b>
+               no resumo é estimativa de planejamento — confira na busca ao lado.`}
           </p>` : ''}
       </section>` : ''}
 
