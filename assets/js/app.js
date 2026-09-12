@@ -42,6 +42,7 @@ const state = {
   conexao: null,          // trajeto com escala do destino aberto
   filtro: 'todos',        // todos | confirmado (direto+escala) | direto
   viaEscala: new Map(),   // destino -> escala, pela malha da Ryanair
+  temVooDireto: new Set(), // destinos com rota direta de alguma saída
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
   ignorarMoveAte: 0,      // até quando ignorar eventos de mapa (ms)
   enquadrado: null,       // destino cujo trajeto já foi enquadrado
@@ -281,11 +282,15 @@ function drawResults() {
   for (const r of state.results) {
     const over = r.verdict === 'over';
     // estrela dourada = o voo deste destino tem preço real, não estimativa
-    const estrela = r.real && !r.useGround ? '<i class="pin-star">★</i>' : '';
+    // estrela cheia: preço confirmado. contorno: tem voo direto, preço ainda
+    // não consultado (abre o destino e ele é buscado)
+    const estrela = r.real && !r.useGround ? '<i class="pin-star">★</i>'
+      : (r.voaDireto && !r.useGround ? '<i class="pin-star pin-star-vazia">☆</i>' : '');
     const label = over ? '' : estrela + esc(fmt(r.total, { compact:true }));
     const cls = `pin pin-${r.verdict}`
       + (over ? ' pin-dot' : '')
-      + (r.real && !over ? ' pin-real' : '');
+      + (r.real && !over ? ' pin-real' : '')
+      + (!r.real && r.voaDireto && !over ? ' pin-direto' : '');
     const m = L.marker([r.dest.lat, r.dest.lon], {
       icon: pinIcon(label, cls),
       zIndexOffset: over ? 0 : r.real ? 800 : r.verdict === 'fit' ? 600 : 300,
@@ -296,7 +301,9 @@ function drawResults() {
        ${fmt(r.total)} · ${r.days} dias
        ${r.real && !r.useGround
          ? `<br><span class="tip-real">★ voo com preço real: ${fmt(r.real.price)}</span>`
-         : '<br><span class="tip-est">valor estimado</span>'}`,
+         : r.voaDireto && !r.useGround
+           ? '<br><span class="tip-direto">☆ tem voo direto — abra para ver o preço</span>'
+           : '<br><span class="tip-est">valor estimado</span>'}`,
       { direction:'top', offset:[0,-14], className:'dest-tip' },
     );
     m.on('click', () => select(r.dest.id, { fly:false }));
@@ -426,6 +433,7 @@ function search({ refit = true } = {}) {
       mode: state.mode, budgetEUR: budgetEUR(),
       sortBy: state.sortBy, realFares: state.realFares,
       filtro: state.filtro, viaEscala: state.viaEscala, bounds: areaVisivel(),
+      temVooDireto: state.temVooDireto,
       manterId: state.selected,
     });
 
@@ -472,6 +480,33 @@ async function loadRealFares() {
     state.originAirports = saidas;
     state.originAirport = saidas[0] || null;
     if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
+
+    // Quais destinos têm voo direto de alguma das saídas — pela MALHA, não
+    // pelas tarifas já conhecidas.
+    //
+    // O filtro "só voo direto" usava as tarifas, e a consulta geral traz só os
+    // 20 destinos mais baratos de cada aeroporto. O Porto tem voo direto de
+    // Cagliari e ficava escondido pelo filtro; como o preço só é buscado ao
+    // abrir o destino, e o filtro o escondia, ele nunca aparecia. As rotas
+    // ficam 30 dias em cache: são 5 consultas, uma por saída.
+    const porIata = new Map(airports.map(a => [a.iata, a]));
+    const diretos = new Set();
+    for (const saida of saidas) {
+      const rotas = await RYA.routesFrom(saida.iata, signal);
+      if (signal.aborted) return;
+      for (const rota of rotas) {
+        const apt = porIata.get(rota.iata);
+        if (!apt) continue;
+        let melhor = null, menor = Infinity;
+        for (const d of DESTINATIONS) {
+          const km = distanciaSimples(apt, d);
+          if (km < menor) { menor = km; melhor = d; }
+        }
+        if (melhor && menor <= 130) diretos.add(melhor.id);
+      }
+    }
+    state.temVooDireto = diretos;
+    search({ refit:false });
 
     // Tarifas de todas as saídas, juntadas: para cada destino fica a mais
     // barata, junto com o aeroporto de onde ela parte.
@@ -597,8 +632,8 @@ function setFareStatus(kind) {
   const caixa = $('#mapFiltros');
   const comEscala = state.viaEscala.size;
   if (caixa) {
-    caixa.hidden = n === 0;
-    $('#countDireto').textContent = n || '';
+    caixa.hidden = n === 0 && state.temVooDireto.size === 0;
+    $('#countDireto').textContent = state.temVooDireto.size || n || '';
     const btnD = $('#btnDireto');
     if (btnD) {
       btnD.title = usados.size > 1

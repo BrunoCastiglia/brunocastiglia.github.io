@@ -406,6 +406,16 @@ aí a sua escolha manda.
 
 ## Filtrar só o que tem preço confirmado
 
+> **O filtro pergunta à malha, não às tarifas.** Filtrar por "tem preço
+> confirmado" escondia destinos que têm voo direto mas cujo preço ainda não foi
+> consultado — e como o preço só é buscado ao abrir o destino, escondê-lo
+> impedia que ele fosse buscado. O Porto tem voo direto de Cagliari e sumia com
+> o filtro ligado. Agora o filtro usa as **rotas** (cache de 30 dias, 5
+> consultas), e o preço chega ao abrir.
+>
+> No mapa, ★ cheia é preço confirmado e ☆ vazada é "tem voo direto, preço a
+> consultar". De Olbia isso levou o filtro de 30 para **41 destinos**.
+
 Dentro do mapa há dois botões, com a contagem de cada um:
 
 - **★ Só preço confirmado** — destinos com voo direto **ou** alcançáveis com uma

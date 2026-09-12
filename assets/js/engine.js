@@ -142,6 +142,7 @@ export function tripCost(origin, dest, opts) {
     hours: flightHours(km), stops: flightStops(km),
     season, useGround, airPP, groundPP: ground,
     real, viaEscala, estimatedAirPP: estimated,
+    voaDireto: !!(real || opts.temVooDireto?.has(dest.id)),
     flight, stay, total, left, verdict, mode: opts.mode || 'both',
     perDay: Math.round(total / days),
     nightly: Math.round(nightly),
@@ -176,7 +177,10 @@ export function dentroDaArea(b, d) {
  * @param {object} opts  além dos de tripCost: { tags:[], maxHours:number|null }
  */
 export function rankDestinations(origin, destinations, opts) {
-  const { tags = [], maxHours = null, bounds = null, filtro = 'todos', manterId = null } = opts;
+  const {
+    tags = [], maxHours = null, bounds = null, filtro = 'todos',
+    manterId = null, temVooDireto = null,
+  } = opts;
   const out = [];
 
   for (const d of destinations) {
@@ -188,10 +192,13 @@ export function rankDestinations(origin, destinations, opts) {
     if (distanceKm(origin, d) < 80) continue;                       // é a própria cidade
     if (tags.length && !tags.every(t => d.tags.includes(t))) continue;
     const r = tripCost(origin, d, opts);
-    // 'direto'     = só quem tem voo direto com preço confirmado
-    // 'confirmado' = direto OU alcançável com uma escala pela malha Ryanair
-    if (filtro === 'direto' && !r.real) continue;
-    if (filtro === 'confirmado' && !r.real && !r.viaEscala) continue;
+    // 'direto' pergunta à MALHA, não às tarifas já baixadas: um destino pode
+    // ter voo direto sem que o preço tenha sido consultado ainda. Filtrar pelo
+    // preço escondia destinos que existem — e, como o preço só é buscado ao
+    // abrir o destino, escondê-lo impedia que ele fosse buscado.
+    const voaDireto = r.real || temVooDireto?.has(d.id);
+    if (filtro === 'direto' && !voaDireto) continue;
+    if (filtro === 'confirmado' && !voaDireto && !r.viaEscala) continue;
     if (maxHours && !r.useGround && r.hours > maxHours) continue;
     out.push(r);
   }

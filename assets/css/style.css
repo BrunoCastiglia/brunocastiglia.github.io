@@ -731,3 +731,9 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .procurar-caminhos span{font-size:11px;color:var(--txt-faint)}
 .procurar-caminhos:hover span{color:var(--accent)}
 .map-fare[data-kind=pausa]{color:var(--tight);font-style:italic}
+
+/* tem voo direto, preço ainda não consultado */
+.pin-star-vazia{color:rgba(255,210,74,.85)}
+.pin.pin-direto{box-shadow:0 0 0 1.5px rgba(255,210,74,.55), 0 3px 10px rgba(0,0,0,.5)}
+.dot-star-vazia{color:rgba(255,210,74,.85)}
+.tip-direto{color:#ffd24a;font-size:11px;opacity:.9}
