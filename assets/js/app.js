@@ -53,6 +53,9 @@ const state = {
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
   originAirports: [],     // até 3 aeroportos de partida, por distância
+  quando: 'duracao',      // como as datas são informadas: duracao | datas
+  dataIda: '',            // modo datas: dia da ida (AAAA-MM-DD)
+  dataVolta: '',          // modo datas: dia da volta, vazio = em aberto
 };
 
 const budgetEUR = () => state.budget / FX.fromEUR(1, state.currency);
@@ -403,7 +406,6 @@ function fitToResults() {
 function search({ refit = true } = {}) {
   if (!state.origin) return;
   $('#mapLoading').hidden = false;
-  $('#btnSearch').disabled = true;
 
   // Cede o thread para o navegador pintar o "calculando" antes do trabalho
   // síncrono. Usamos setTimeout e NÃO requestAnimationFrame: rAF fica parado
@@ -426,7 +428,6 @@ function search({ refit = true } = {}) {
     if (still) renderDetails(still); else clearDetails();
 
     $('#mapLoading').hidden = true;
-    $('#btnSearch').disabled = false;
   }, 0);
 }
 
@@ -684,10 +685,41 @@ function select(id, { fly = false } = {}) {
   $('#details').dataset.state = 'open';
   $('#detailsHandle').setAttribute('aria-expanded', 'true');
   ajustarAlturaAoConteudo();
+  pintarBotaoLimpar();
   state.conexao = null;
   state.caminho = null;          // o trajeto do destino anterior não vale mais
   if (state.enquadrado !== id) state.enquadrado = null;
   desenharRotaFixa({ animar:true });
+}
+
+/**
+ * Desfaz a seleção e devolve a tela ao estado de mapa limpo.
+ *
+ * Fechar a barra pelo cabeçalho só a recolhia: o destino seguia escolhido, o
+ * arco continuava desenhado e o pino, destacado — e voltar a "olhar o mapa
+ * inteiro" exigia clicar em outro lugar qualquer. Aqui a saída é explícita.
+ *
+ * Não mexe no formulário: origem, orçamento e datas são o contexto da pessoa,
+ * não a seleção. Só o destino digitado sai junto, porque é ele que prende o
+ * mapa a um lugar só.
+ */
+function limparSelecao() {
+  state.selected = null;
+  state.conexao = null;
+  state.caminho = null;
+  state.enquadrado = null;
+  if (state.destinoAlvo) limparDestino();
+  clearDetails({ forcar:true });
+  desenharRotaFixa();
+  paintSelection();
+  pintarBotaoLimpar();
+  setTimeout(() => map.invalidateSize(), 260);
+}
+
+/** O botão de limpar só existe quando há algo para limpar. */
+function pintarBotaoLimpar() {
+  const b = $('#btnLimparSelecao');
+  if (b) b.hidden = !state.selected && !state.destinoAlvo;
 }
 
 /* ---------------------------------------------------------- detalhes --- */
@@ -783,40 +815,47 @@ function renderDetails(r) {
       <span class="opt-go opt-go-real">reservar este voo →</span>
     </a>` : '';
 
-  // Com preço confirmado não faz sentido mandar a pessoa pesquisar de novo:
-  // a coluna some e o espaço fica para as opções de caminho.
-  const semBusca = !!r.real && mode.flight && !mode.stay;
-  const ctx     = { origin: state.origin };
+  const ctx = { origin: state.origin };
   // A linha "Estimativa de mercado" saiu: repetia o valor que já está no
   // Resumo e levava ao mesmo Google do botão ao lado, com um destaque verde
   // que competia com o do preço confirmado. Ficam só as opções reais.
   const flights = P.flightOptions(r, ctx).filter(o => !o.estimativa);
   const stays   = P.stayOptions(r, ctx);
-  const links   = bookingLinks(state.origin, r, state.month)
-                    .filter(l => (mode.flight && l.kind === 'flight') || (mode.stay && l.kind === 'stay'));
+  // Com preço confirmado não faz sentido mandar a pessoa pesquisar o voo de
+  // novo: a busca de voo some e o espaço fica para as opções de caminho. A de
+  // hospedagem continua, porque ali nunca há preço confirmado.
+  const links = bookingLinks(state.origin, r, state.month)
+    .filter(l => (mode.flight && l.kind === 'flight' && !r.real)
+              || (mode.stay   && l.kind === 'stay'));
+  const semBusca = links.length === 0;
 
   // Sem voo direto para este destino, oferecemos o aeroporto vizinho que tem.
   // A sugestão de cidade vizinha vive na caixa de caminhos (#conexaoBox), que
   // é montada depois com voos, preços e links. Ter as duas mostrava a mesma
   // informação duas vezes na tela.
 
+  // O total saiu do corpo e subiu para o cabeçalho: repetido em letra grande
+  // ao lado de cada card, ele competia com o preço de cada opção — que é o que
+  // a pessoa compara de fato. Aqui fica o contexto (quanto sobra do orçamento)
+  // e a divisão voo/hospedagem, que só informa algo quando há as duas coisas.
+  const resumo = `
+    <div class="resumo-linha">
+      <span class="resumo-saldo ${r.left >= 0 ? 'ok' : 'bad'}">
+        ${r.left >= 0
+          ? `Sobram <b>${fmt(r.left)}</b> de ${fmt(budgetEUR())}`
+          : `Faltam <b>${fmt(-r.left)}</b> para ${fmt(budgetEUR())}`}
+      </span>
+      ${parts.length > 1 ? `<span class="resumo-bar"><span class="bar">${bar}</span>
+        <span class="bar-key">${key}</span></span>` : ''}
+      ${localTxt}
+    </div>`;
+
   $('#detailsBody').innerHTML = `
+    ${resumo}
     <div class="dgrid dgrid-${r.mode}${semBusca ? ' dgrid-sem-busca' : ''}">
 
-      <section class="dcol">
-        <h4>Resumo</h4>
-        <div class="sum-total"><b>${fmt(r.total)}</b><span>${mode.short}</span></div>
-        <p class="sum-left ${r.left >= 0 ? 'ok' : 'bad'}">
-          ${r.left >= 0
-            ? `Sobram ${fmt(r.left)} do seu orçamento de ${fmt(budgetEUR())}.`
-            : `Faltam ${fmt(-r.left)} para o seu orçamento de ${fmt(budgetEUR())}.`}
-        </p>
-        ${parts.length > 1 ? `<div class="bar">${bar}</div><div class="bar-key">${key}</div>` : ''}
-        ${localTxt}
-      </section>
-
       ${mode.flight ? `
-      <section class="dcol">
+      <section class="dcol dcol-larga">
         <h4>Como chegar · ${r.useGround ? 'rota terrestre' : `${Math.round(r.km).toLocaleString('pt-BR')} km`}</h4>
         ${realRow}
         <div class="conexao" id="conexaoBox" hidden></div>
@@ -838,8 +877,8 @@ function renderDetails(r) {
       </section>` : ''}
 
       ${semBusca ? '' : `
-      <section class="dcol">
-        <h4>${mode.flight && !mode.stay ? 'Pesquisar voo' : 'Pesquisar'}</h4>
+      <section class="dcol dcol-busca">
+        <h4>${links.every(l => l.kind === 'stay') ? 'Pesquisar hospedagem' : 'Pesquisar'}</h4>
         <div class="book book-abas" id="abasBusca">
           ${links.map(l => `<a class="aba" href="${l.href}" target="_blank" rel="noopener nofollow">
              <b>${esc(l.label)}</b><span>${esc(l.note)}</span></a>`).join('')}
@@ -898,6 +937,20 @@ function vooDiretoPerto(r, maxKm = 350) {
 }
 
 /** Liga ou desliga o destaque dourado da coluna de busca. */
+/**
+ * Tira da tela a coluna de busca no Google e alarga o que sobrou.
+ *
+ * Some só quando já existe resposta melhor — preço confirmado ou caminho
+ * encontrado. Sem isso a coluna continua ali, competindo com a informação boa
+ * pelo mesmo espaço horizontal.
+ */
+function esconderColunaBusca() {
+  const col = $('#abasBusca')?.closest('.dcol');
+  if (!col) return;
+  col.hidden = true;
+  col.closest('.dgrid')?.classList.add('dgrid-sem-busca');
+}
+
 function realcarBusca(ligado) {
   const abas = $('#abasBusca');
   const col = abas?.closest('.dcol');
@@ -1344,10 +1397,12 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
   caixa.innerHTML = opcoes.map(o => `
     <div class="caminho caminho-${tom(o)}" data-caminho="${o.chave}">
       <div class="conexao-head">
-        <span class="conexao-tag ${tom(o) === 'verde' ? 'tag-verde' : 'tag-ouro'}">${o.tag}</span>
-        ${selo(o)}
-        <b>${fmt(o.total)}</b>
-        <small>${esc(o.resumo)}${o.duracao < 9999 ? ` · ${fmtDuracao(o.duracao)} de viagem` : ''}</small>
+        <div class="conexao-id">
+          <span class="conexao-tag ${tom(o) === 'verde' ? 'tag-verde' : 'tag-ouro'}">${o.tag}</span>
+          ${selo(o)}
+          <small>${esc(o.resumo)}${o.duracao < 9999 ? ` · ${fmtDuracao(o.duracao)} de viagem` : ''}</small>
+        </div>
+        <b class="conexao-preco">${fmt(o.total)}</b>
       </div>
       <div class="conexao-bloco">${o.corpo}</div>
       <p class="conexao-nota">${o.nota} ${o.acao}</p>
@@ -1366,7 +1421,15 @@ function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
 
   state.conexao = null;
   realcarBusca(false);
+  // Achamos caminhos com preço confirmado: a coluna "pesquisar no Google" vira
+  // ruído — manda a pessoa procurar de novo o que ela acabou de receber pronto.
+  // Tirá-la devolve a largura para os dois cards, que é onde a decisão acontece.
+  esconderColunaBusca();
   fixarCaminho(r.dest.id, opcoes[0].pontos);
+  // Os caminhos chegam segundos depois do clique, quando a barra já abriu na
+  // altura do que existia antes. Sem reajustar aqui, a opção recém-encontrada
+  // nasce abaixo da dobra — e é justamente a informação que a pessoa esperou.
+  ajustarAlturaAoConteudo();
 }
 
 const googleTerra = (de, para) => 'https://www.google.com/search?' + new URLSearchParams({
@@ -1642,17 +1705,105 @@ function setupDestino() {
   $('#btnLimparDestino').addEventListener('click', limparDestino);
 }
 
-/* --------------------------------------------------------- formulário -- */
-function setupForm() {
-  // mês
+/* ------------------------------------------------------------- datas ---- */
+/**
+ * Os dois jeitos de dizer quando a viagem é.
+ *
+ * "Por duração" é o modo de quem ainda está sonhando: sete dias em setembro,
+ * qualquer semana serve — e a busca varre o mês inteiro atrás do mais barato.
+ * "Por datas" é o de quem já tem as férias marcadas: parte neste dia e volta
+ * naquele, e aí não adianta mostrar uma tarifa de outra semana.
+ *
+ * Os dois alimentam o mesmo par `state.month` / `state.days`, que é o que o
+ * motor de cálculo entende. O modo datas acrescenta a janela exata, que vai
+ * para o provedor por `RYA.definirDatas`.
+ */
+function setupQuando() {
   const sel = $('#month');
   MONTHS.forEach((m, i) => sel.appendChild(new Option(m, i, false, i === state.month)));
-  sel.addEventListener('change', () => {
-    state.month = +sel.value;
-    state.realFares = new Map();      // outro mês, outras tarifas
-    search({ refit:false });
-    loadRealFares();
+
+  const hoje = new Date();
+  // a companhia não vende para hoje; três dias de folga é o mínimo realista
+  const minIda = new Date(hoje.getTime() + 3 * 864e5).toISOString().slice(0, 10);
+  $('#dataIda').min = minIda;
+  $('#dataVolta').min = minIda;
+
+  const diasEntre = (a, b) =>
+    Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5);
+
+  // Recalcula tudo que depende das datas e refaz a busca. `tarifas` diz se as
+  // tarifas reais precisam ser buscadas de novo — mudar o mês ou a duração
+  // invalida o que está no mapa, mudar só os viajantes não.
+  const aplicarQuando = () => {
+    if (state.quando === 'datas' && state.dataIda) {
+      const ida = state.dataIda;
+      let volta = state.dataVolta;
+      if (volta && diasEntre(ida, volta) < 1) volta = '';     // volta antes da ida não existe
+      state.month = +ida.slice(5, 7) - 1;
+      state.days  = volta ? Math.max(1, diasEntre(ida, volta)) : 7;
+      RYA.definirDatas(ida, volta);
+      $('#datasHint').textContent = volta
+        ? `${diasEntre(ida, volta)} ${diasEntre(ida, volta) === 1 ? 'dia' : 'dias'} de viagem. ` +
+          'Só entram voos que partem e voltam nesses dias.'
+        : 'Volta em aberto: buscamos qualquer retorno até um mês depois da ida.';
+    } else {
+      RYA.definirDatas(null);
+      state.days = clamp(+$('#days').value || 7, 1, 90);
+      state.month = +sel.value;
+    }
+    state.realFares = new Map();       // outra janela, outras tarifas
+    state.caminhosPorDestino.clear();  // e outros caminhos
+    debouncedSearch();
+    clearTimeout(faresTimer);
+    faresTimer = setTimeout(loadRealFares, 700);
+  };
+
+  // alternância entre os dois modos
+  $$('[data-quando]').forEach(b => b.addEventListener('click', () => {
+    if (state.quando === b.dataset.quando) return;
+    $$('[data-quando]').forEach(x => x.classList.toggle('is-active', x === b));
+    state.quando = b.dataset.quando;
+    $('#blocoDuracao').hidden = state.quando !== 'duracao';
+    $('#blocoDatas').hidden   = state.quando !== 'datas';
+
+    // Entrando no modo datas sem nada preenchido, sugerimos a mesma viagem que
+    // já estava montada: mesmo mês, mesma duração. Trocar de modo não deve
+    // zerar o que a pessoa acabou de escolher.
+    if (state.quando === 'datas' && !state.dataIda) {
+      const ano = state.month < hoje.getMonth() ? hoje.getFullYear() + 1 : hoje.getFullYear();
+      const sugerida = new Date(Date.UTC(ano, state.month, 1));
+      const ida = new Date(Math.max(sugerida.getTime(), new Date(minIda + 'T00:00:00Z').getTime()));
+      const volta = new Date(ida.getTime() + state.days * 864e5);
+      state.dataIda   = ida.toISOString().slice(0, 10);
+      state.dataVolta = volta.toISOString().slice(0, 10);
+      $('#dataIda').value   = state.dataIda;
+      $('#dataVolta').value = state.dataVolta;
+    }
+    aplicarQuando();
+  }));
+
+  sel.addEventListener('change', aplicarQuando);
+  $('#days').addEventListener('input', aplicarQuando);
+
+  $('#dataIda').addEventListener('change', e => {
+    state.dataIda = e.target.value;
+    // a volta nunca pode ser antes da ida
+    $('#dataVolta').min = state.dataIda || minIda;
+    if (state.dataVolta && state.dataVolta <= state.dataIda) {
+      state.dataVolta = '';
+      $('#dataVolta').value = '';
+    }
+    aplicarQuando();
   });
+  $('#dataVolta').addEventListener('change', e => {
+    state.dataVolta = e.target.value;
+    aplicarQuando();
+  });
+}
+
+/* --------------------------------------------------------- formulário -- */
+function setupForm() {
+  setupQuando();
 
   // orçamento (campo + slider sincronizados)
   const budget = $('#budget'), range = $('#budgetRange');
@@ -1666,14 +1817,6 @@ function setupForm() {
   budget.addEventListener('input', () => { syncBudget(+budget.value || 0, 'input'); debouncedSearch(); });
   range.addEventListener('input', () => { syncBudget(+range.value, 'range'); debouncedSearch(); });
 
-  // números
-  $('#days').addEventListener('input', e => {
-    state.days = clamp(+e.target.value, 1, 90);
-    state.realFares = new Map();      // a duração muda a tarifa
-    debouncedSearch();
-    clearTimeout(faresTimer);
-    faresTimer = setTimeout(loadRealFares, 700);
-  });
   $('#people').addEventListener('input', e => { state.people = clamp(+e.target.value, 1, 8); debouncedSearch(); });
 
   // estilo
@@ -1719,8 +1862,18 @@ function setupForm() {
   };
   $('#btnConfirmado').addEventListener('click', alterna('confirmado'));
   $('#btnDireto').addEventListener('click', alterna('direto'));
+  $('#btnLimparSelecao').addEventListener('click', limparSelecao);
 
-  $('#tripForm').addEventListener('submit', e => { e.preventDefault(); search(); });
+  // Esc é o gesto que todo mundo já tenta para sair de um estado
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;   // o diálogo fecha sozinho
+    if (state.selected || state.destinoAlvo) limparSelecao();
+  });
+
+  // Não há botão de pesquisar: a busca acompanha os campos em tempo real.
+  // O submit ainda é interceptado porque Enter num campo dispara o form.
+  $('#tripForm').addEventListener('submit', e => e.preventDefault());
 
   setupDetailsResizer();
 
@@ -1752,18 +1905,38 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v || a));
  * metade da tela. Respeita a altura que a pessoa tenha fixado arrastando —
  * aí a escolha dela manda.
  */
+/**
+ * Abre a barra na altura exata da informação — sem rolagem para ler o essencial.
+ *
+ * Mede até o fim da grade de conteúdo, e não o `scrollHeight` do corpo todo:
+ * o strip de anúncios vem depois e é alto, então incluí-lo fazia a conta
+ * estourar o teto e o que sobrava era justamente o conteúdo espremido, com os
+ * anúncios ocupando a altura conquistada. Anúncio abaixo da dobra é normal;
+ * o preço do voo não pode estar.
+ *
+ * Uma altura escolhida à mão vira piso, não teto: a pessoa continua mandando
+ * no tamanho da barra, mas nunca fica com menos do que a informação precisa.
+ */
 function ajustarAlturaAoConteudo() {
-  try { if (localStorage.getItem('ppi.detailsH')) return; } catch {}
   const corpo = $('#detailsBody');
   if (!corpo) return;
   // setTimeout e não requestAnimationFrame: rAF fica parado com a aba em
   // segundo plano e a barra nunca se ajustaria.
   setTimeout(() => {
-    const precisa = corpo.scrollHeight;
-    const atual = corpo.clientHeight;
-    if (precisa <= atual + 4) return;
-    const teto = Math.round(window.innerHeight * 0.5);
-    aplicarAltura(Math.min(precisa + 8, teto));
+    const grade = corpo.querySelector('.dgrid');
+    if (!grade) return;
+    const base = corpo.getBoundingClientRect().top;
+    const fim  = grade.getBoundingClientRect().bottom;
+    const estilo = getComputedStyle(corpo);
+    const precisa = Math.ceil(fim - base + parseFloat(estilo.paddingBottom || 0));
+
+    let piso = 0;
+    try { piso = +localStorage.getItem('ppi.detailsH') || 0; } catch {}
+
+    const teto = Math.round(window.innerHeight * 0.62);
+    const alvo = Math.max(piso, Math.min(precisa + 6, teto));
+    if (alvo <= corpo.clientHeight + 4) return;
+    aplicarAltura(alvo);
     map.invalidateSize();
   }, 60);
 }

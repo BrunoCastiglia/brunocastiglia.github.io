@@ -4,25 +4,69 @@
    ===================================================================== */
 
 :root{
-  --bg:#0d1117;
-  --bg-2:#131a24;
-  --panel:#161e2a;
-  --panel-2:#1c2735;
-  --line:#243044;
-  --line-soft:#1d2734;
-  --txt:#e6edf5;
-  --txt-dim:#93a2b5;
-  --txt-faint:#6b7c91;
-  --accent:#2dd4a7;
-  --accent-ink:#04231b;
-  --fit:#2dd4a7;
-  --tight:#f2b53b;
-  --over:#ef5f6b;
-  --origin:#63a8ff;
+  /* ---- superfícies ----
+     Fundo levemente cinza em vez de branco puro: papel branco atrás de texto
+     escuro cansa a vista, e um cinza de 2% já tira o brilho sem parecer
+     "apagado". Os painéis, esses sim brancos, ganham profundidade por
+     contraste com o fundo — sem precisar de sombra pesada. */
+  --bg:#f4f6f8;
+  --bg-2:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#f7f9fb;
+  --line:#dfe4ea;
+  --line-soft:#eceff3;
+  --scroll:#c6ced8;
+
+  /* ---- texto ----
+     Três níveis, e só três: título, apoio e detalhe. Mais hierarquia que isso
+     vira ruído e a pessoa perde a referência do que é importante. */
+  --txt:#18222f;
+  --txt-dim:#5b6b7e;
+  --txt-faint:#8593a4;
+
+  /* ---- cor da marca ----
+     O verde do tema escuro (#2dd4a7) tem contraste 2,1:1 sobre branco: serve
+     de fundo, não de texto. No claro ele fica escuro o bastante para ler, e o
+     tom vivo migra para os fundos de pílula (--accent-bg / --accent-chip). */
+  --accent:#0d9a72;
+  --accent-2:#0b7f80;
+  --accent-ink:#ffffff;
+  --accent-bg:#0d9a720f;
+  --accent-bg-forte:#0d9a721f;
+  --accent-chip:#0d9a7226;
+  --accent-line:#0d9a7259;
+
+  /* ---- veredito do orçamento ----
+     Verde/âmbar/vermelho, cada um com a tinta que garante leitura quando ele
+     é fundo de pílula no mapa. */
+  --fit:#0fa97c;      --fit-ink:#04231b;
+  --tight:#e0a020;    --gold-ink:#3a2c00;
+  --over:#d94452;
+  --over-bg:#fdeced;  --over-ink:#a5323d;  --over-line:#d9445259;
+
+  /* ---- origem ---- */
+  --origin:#2563eb;   --origin-ink:#ffffff;
+
+  /* ---- dourado do "preço confirmado" ----
+     Dois papéis distintos: --gold-solid é fundo de selo (precisa ser vivo) e
+     --gold é texto e borda (precisa ser escuro para ler sobre branco). Usar o
+     mesmo tom nos dois era o que sumia no tema claro. */
+  --gold:#9a6a00;
+  --gold-solid:#f5b32b;
+  --gold-bg:#f5b32b14;
+  --gold-bg-forte:#f5b32b2e;
+  --gold-line:#d99a0866;
+  --gold-chip:#f5b32b33;
+
+  /* ---- caixas sobre o mapa ---- */
+  --overlay:#ffffffee;
+  --overlay-solido:#fffffff7;
+  --mapa-fundo:#e8edf1;
+
   --radius:12px;
   --sidebar-w:352px;
   --details-h:clamp(92px, 10vh, 132px);
-  --shadow:0 10px 30px rgba(0,0,0,.45);
+  --shadow:0 6px 20px rgba(23,43,77,.10), 0 1px 3px rgba(23,43,77,.08);
   --font:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
 
@@ -47,7 +91,7 @@ button,input,select{font:inherit;color:inherit}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand-mark{
   width:30px;height:30px;display:grid;place-items:center;border-radius:9px;
-  background:linear-gradient(140deg,var(--accent),#1e8f9e);color:var(--accent-ink);
+  background:linear-gradient(140deg,var(--accent),var(--accent-2));color:var(--accent-ink);
   font-size:17px;font-weight:800;flex:none;
 }
 .brand-text{display:flex;flex-direction:column;line-height:1.15;min-width:0}
@@ -89,7 +133,7 @@ button,input,select{font:inherit;color:inherit}
 }
 .sidebar::-webkit-scrollbar,.results-list::-webkit-scrollbar,.details-body::-webkit-scrollbar{width:9px}
 .sidebar::-webkit-scrollbar-thumb,.results-list::-webkit-scrollbar-thumb,.details-body::-webkit-scrollbar-thumb{
-  background:#26334608;background:#263346;border-radius:9px;border:2px solid var(--bg-2)}
+  background:var(--scroll);border-radius:9px;border:2px solid var(--bg-2)}
 
 .panel{padding:16px 16px 4px;display:flex;flex-direction:column;gap:14px}
 
@@ -139,19 +183,19 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   box-shadow:var(--shadow);max-height:230px;overflow-y:auto;padding:4px;
 }
 .combo-item{padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:8px}
-.combo-item:hover,.combo-item.is-active{background:rgba(45,212,167,.13)}
+.combo-item:hover,.combo-item.is-active{background:var(--accent-bg-forte)}
 .combo-item small{color:var(--txt-faint);font-size:11px;white-space:nowrap}
 
 /* --------------------------------------------------------- mapa ----- */
-.map-wrap{grid-area:map;position:relative;background:#0b1017;min-height:0}
+.map-wrap{grid-area:map;position:relative;background:var(--mapa-fundo);min-height:0}
 #map{position:absolute;inset:0}
-.leaflet-container{background:#0b1017;font-family:var(--font)}
+.leaflet-container{background:var(--mapa-fundo);font-family:var(--font)}
 .leaflet-control-zoom a{background:var(--panel)!important;color:var(--txt)!important;border-color:var(--line)!important}
-.leaflet-control-attribution{background:rgba(13,17,23,.78)!important;color:var(--txt-faint)!important;font-size:10px}
+.leaflet-control-attribution{background:var(--overlay)!important;color:var(--txt-faint)!important;font-size:10px}
 .leaflet-control-attribution a{color:var(--txt-dim)!important}
 
 .map-overlay{
-  position:absolute;z-index:800;background:rgba(19,26,36,.92);backdrop-filter:blur(8px);
+  position:absolute;z-index:800;background:var(--overlay);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
 }
 .map-stats{top:12px;left:12px;display:flex;gap:2px;padding:8px 4px}
@@ -163,14 +207,22 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .map-stats div:nth-child(3) b{color:var(--over)}
 .map-stats span{font-size:10px;color:var(--txt-faint);white-space:nowrap}
 
-.map-legend{bottom:12px;left:12px;display:flex;flex-direction:column;gap:5px;padding:9px 11px;font-size:11px;color:var(--txt-dim)}
+/* A legenda passou para a direita: à esquerda ela dividia a coluna com a pilha
+   de botões e, em telas mais baixas, as duas se sobrepunham. Separadas, cada
+   canto tem uma função — comandos à esquerda, chave de leitura à direita. */
+.map-legend{
+  bottom:26px;right:12px;left:auto;
+  display:flex;flex-direction:column;gap:5px;padding:9px 11px;
+  font-size:11px;color:var(--txt-dim);
+}
+@media (max-width:820px){ .map-legend{display:none} }
 .map-legend span{display:flex;align-items:center;gap:7px}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .dot-fit{background:var(--fit)}.dot-tight{background:var(--tight)}.dot-over{background:var(--over)}.dot-origin{background:var(--origin)}
 
 .map-loading{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:900;
-  background:rgba(19,26,36,.95);border:1px solid var(--line);border-radius:10px;
+  background:var(--overlay-solido);border:1px solid var(--line);border-radius:10px;
   padding:12px 18px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);
 }
 .spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
@@ -190,21 +242,21 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .pin:hover{transform:translate(-50%,-50%) scale(1.09);z-index:999!important}
 
 /* destino com preço real de voo */
-.pin-star{font-style:normal;font-size:10px;line-height:1;color:#8a6a00}
+.pin-star{font-style:normal;font-size:10px;line-height:1;color:var(--gold)}
 .pin.pin-real{
-  box-shadow:0 0 0 2px #ffd24a, 0 3px 12px rgba(0,0,0,.55);
+  box-shadow:0 0 0 2px var(--gold-solid), 0 3px 12px rgba(0,0,0,.55);
   border-color:rgba(0,0,0,.45);
 }
 .dot-star{
   width:auto;height:auto;border-radius:0;background:none;
-  color:#ffd24a;font-size:11px;line-height:1;
+  color:var(--gold);font-size:11px;line-height:1;
 }
-.tip-real{color:#ffd24a;font-size:11px}
+.tip-real{color:var(--gold);font-size:11px}
 .tip-est{color:var(--txt-faint);font-size:11px}
-.pin-fit{background:var(--fit);color:#04231b}
-.pin-tight{background:var(--tight);color:#2b1d00}
-.pin-over{background:#3a2b31;color:#c98d94;border-color:rgba(239,95,107,.5);font-weight:600}
-.pin-origin{background:var(--origin);color:#04203f}
+.pin-fit{background:var(--fit);color:var(--fit-ink)}
+.pin-tight{background:var(--tight);color:var(--gold-ink)}
+.pin-over{background:var(--over-bg);color:var(--over-ink);border-color:var(--over-line);font-weight:600}
+.pin-origin{background:var(--origin);color:var(--origin-ink)}
 .pin.is-selected{box-shadow:0 0 0 3px rgba(255,255,255,.85),0 3px 12px rgba(0,0,0,.6);z-index:1000!important}
 
 /* ---------------------------------------------------- detalhes ------ */
@@ -231,18 +283,28 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 .details-body{overflow-y:auto;padding:0 16px 18px}
 
-.dgrid{display:grid;grid-template-columns:minmax(230px,.85fr) 1.1fr 1.1fr minmax(180px,.7fr);gap:16px;align-items:start}
+.dgrid{display:grid;grid-template-columns:2.2fr minmax(230px,1fr) minmax(180px,.66fr);gap:18px;align-items:start}
 .dcol h4{
   margin:0 0 9px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
   color:var(--txt-faint);border-bottom:1px solid var(--line-soft);padding-bottom:6px;
 }
 
-/* coluna resumo */
-.sum-total{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
-.sum-total b{font-size:27px;font-weight:750;letter-spacing:-.02em}
-.sum-total span{font-size:11.5px;color:var(--txt-faint)}
-.sum-left{font-size:12.5px;margin:0 0 12px}
-.sum-left.ok{color:var(--fit)}.sum-left.bad{color:var(--over)}
+/* Faixa de resumo: uma linha só, acima das colunas.
+   Era uma coluna inteira com o total em corpo 27 — que repetia o número já
+   presente no cabeçalho e disputava a atenção com o preço de cada opção, que
+   é o que a pessoa está de fato comparando. Aqui sobra o que o cabeçalho não
+   diz: quanto sobra do orçamento e como o gasto se divide. */
+.resumo-linha{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:0 0 11px;margin-bottom:13px;border-bottom:1px solid var(--line-soft);
+}
+.resumo-saldo{font-size:13px;color:var(--txt-dim)}
+.resumo-saldo b{font-weight:700;font-size:15px}
+.resumo-saldo.ok b{color:var(--accent)}
+.resumo-saldo.bad b{color:var(--over)}
+.resumo-bar{display:flex;align-items:center;gap:10px;flex:1;min-width:220px;max-width:420px}
+.resumo-bar .bar{margin:0;flex:1;max-width:170px}
+.resumo-linha .local-cur{margin:0;border:0;padding:0;flex-basis:100%}
 
 .bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--panel);margin-bottom:8px}
 .bar i{display:block;height:100%}
@@ -260,11 +322,14 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   display:grid;grid-template-columns:1fr auto;gap:1px 10px;padding:8px 10px;border-radius:9px;
   background:var(--panel);border:1px solid var(--line-soft);margin-bottom:6px;
 }
-.opt.is-pick{border-color:var(--accent);background:rgba(45,212,167,.07)}
+.opt.is-pick{border-color:var(--accent);background:var(--accent-bg)}
 .opt-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
 .opt-name .pick{font-size:9px;font-weight:800;color:var(--accent-ink);background:var(--accent);padding:1px 5px;border-radius:4px;letter-spacing:.03em}
 .opt-meta{grid-column:1;font-size:11px;color:var(--txt-faint)}
-.opt-price{grid-row:1/3;grid-column:2;align-self:center;text-align:right;font-size:13.5px;font-weight:700}
+.opt-price{
+  grid-row:1/3;grid-column:2;align-self:start;text-align:right;
+  font-size:19px;font-weight:750;letter-spacing:-.02em;line-height:1.15;
+}
 .opt-price small{display:block;font-size:10px;font-weight:500;color:var(--txt-faint)}
 
 .book{display:flex;flex-direction:column;gap:7px}
@@ -280,7 +345,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 /* ----------------------------------------------------- anúncios ----- */
 .ad-slot{
   margin:14px 16px;min-height:250px;border:1px dashed var(--line);border-radius:10px;
-  display:grid;place-items:center;color:#3c4a5e;font-size:11px;background:var(--panel);
+  display:grid;place-items:center;color:var(--txt-faint);font-size:11px;background:var(--panel);
 }
 .ad-slot::after{content:"espaço publicitário"}
 .ad-slot:has(ins){border:0;background:none;min-height:0;padding:0}
@@ -343,11 +408,14 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 .leaflet-tooltip.dest-tip::before{border-top-color:var(--line)}
 
-/* Tiles claros do OSM transformados em mapa escuro.
-   O filtro é aplicado só ao painel de tiles — marcadores e rótulos
-   ficam em painéis irmãos e não são invertidos. */
+/* Os tiles do OSM já são claros: em vez de invertê-los, só tiramos parte da
+   saturação e clareamos um pouco. O mapa vira um plano de fundo calmo e as
+   pílulas coloridas de preço — que são o dado — ficam sendo a única coisa
+   saturada na tela, que é onde o olho deve cair primeiro.
+   O filtro pega só o painel de tiles; marcadores e rótulos são painéis irmãos
+   e não são afetados. */
 .leaflet-tile-pane{
-  filter:invert(1) hue-rotate(185deg) brightness(.82) contrast(.92) saturate(.75);
+  filter:saturate(.62) brightness(1.05) contrast(.94);
 }
 .leaflet-control-zoom{border:1px solid var(--line)!important;border-radius:9px!important;overflow:hidden}
 .leaflet-control-zoom a{border-radius:0!important;line-height:26px!important;width:28px!important;height:28px!important}
@@ -372,12 +440,12 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 /* linha da tarifa real, em destaque no painel de detalhes */
 .opt.is-real{
-  border-color:#ffd24a;background:rgba(255,210,74,.09);
+  border-color:var(--gold);background:rgba(255,210,74,.09);
   grid-template-columns:1fr auto;
   box-shadow:0 0 0 1px rgba(255,210,74,.25);
 }
-.opt.is-real .opt-name{color:#ffd24a}
-.pick-real{background:#ffd24a!important;color:#3a2c00!important}
+.opt.is-real .opt-name{color:var(--gold)}
+.pick-real{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
 .opt-book{
   grid-column:1/3;margin-top:6px;font-size:11.5px;font-weight:700;
   color:var(--origin);text-decoration:none;
@@ -391,7 +459,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .seg-stack .seg-btn:first-child{flex-basis:100%}
 
 /* o painel de detalhes se adapta a quantas colunas o modo produz */
-.dgrid-flight,.dgrid-stay{grid-template-columns:minmax(230px,.8fr) 1.3fr minmax(190px,.7fr)}
+/* Só voo ou só hospedagem: duas colunas — a do conteúdo e a da busca. */
+.dgrid-flight,.dgrid-stay{grid-template-columns:1fr minmax(190px,.42fr)}
 
 /* inventário real de hospedagens (OpenStreetMap) */
 .osm-stays{
@@ -405,13 +474,13 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .opt{grid-template-rows:auto auto auto}
 a.opt.is-link{text-decoration:none;color:inherit;display:grid;transition:.15s}
 a.opt.is-link:hover{border-color:var(--accent);background:var(--panel-2);transform:translateY(-1px)}
-a.opt.is-real.is-link:hover{border-color:#ffd24a;background:rgba(255,210,74,.15)}
+a.opt.is-real.is-link:hover{border-color:var(--gold);background:rgba(255,210,74,.15)}
 .opt-go{
   grid-column:1/-1;margin-top:6px;font-size:10.5px;font-weight:700;
   color:var(--accent);opacity:.55;transition:opacity .15s;
 }
 a.opt.is-link:hover .opt-go{opacity:1}
-.opt-go-real{color:#ffd24a}
+.opt-go-real{color:var(--gold)}
 
 /* ==================== faixa de anúncios do rodapé ====================== */
 .ad-strip{
@@ -474,7 +543,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 .conexao-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:9px}
 .conexao-tag{
   font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
-  background:var(--origin);color:#04203f;padding:2px 6px;border-radius:4px;
+  background:var(--origin);color:var(--origin-ink);padding:2px 6px;border-radius:4px;
 }
 .conexao-head b{font-size:16px;font-weight:750;color:var(--origin)}
 .conexao-head small{font-size:10.5px;color:var(--txt-faint)}
@@ -500,7 +569,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 }
 .card-det-tit{
   font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
-  color:#ffd24a;display:flex;align-items:center;gap:5px;margin-bottom:2px;
+  color:var(--gold);display:flex;align-items:center;gap:5px;margin-bottom:2px;
 }
 .card-det-est .card-det-tit{color:var(--txt-faint)}
 .ct-star{font-style:normal;font-size:9px}
@@ -523,7 +592,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
   font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-faint);
   border:1px solid var(--line);border-radius:3px;padding:0 4px;
 }
-.trecho-voo{font-weight:700;color:#ffd24a;font-size:10.5px}
+.trecho-voo{font-weight:700;color:var(--gold);font-size:10.5px}
 .trecho-horas{flex:1}
 .trecho-horas b{color:var(--txt);font-weight:650}
 .trecho-horas i{font-style:normal;color:var(--txt-faint);margin:0 3px}
@@ -537,19 +606,19 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
   position:absolute;z-index:800;top:12px;left:12px;margin-top:104px;
   display:flex;align-items:center;gap:7px;
   padding:8px 13px;border-radius:20px;cursor:pointer;
-  background:rgba(19,26,36,.92);backdrop-filter:blur(8px);
-  border:1.5px solid rgba(255,210,74,.55);color:#ffd24a;
+  background:var(--overlay);backdrop-filter:blur(8px);
+  border:1.5px solid rgba(255,210,74,.55);color:var(--gold);
   font-size:12px;font-weight:650;box-shadow:var(--shadow);
   transition:.15s;
 }
-.map-gold:hover{border-color:#ffd24a;background:rgba(255,210,74,.14)}
+.map-gold:hover{border-color:var(--gold);background:var(--gold-bg-forte)}
 .map-gold i{font-style:normal;font-size:12px;line-height:1}
 .map-gold b{
-  font-size:10.5px;font-weight:750;background:rgba(255,210,74,.2);
+  font-size:10.5px;font-weight:750;background:var(--gold-bg-forte);
   padding:1px 6px;border-radius:9px;
 }
 .map-gold.is-on{
-  background:#ffd24a;color:#3a2c00;border-color:#ffd24a;
+  background:var(--gold);color:var(--gold-ink);border-color:var(--gold);
   box-shadow:0 4px 18px rgba(255,210,74,.35);
 }
 .map-gold.is-on b{background:rgba(0,0,0,.16)}
@@ -583,7 +652,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 .map-filtros .map-gold{position:static;margin:0}
 .map-gold-alt{border-color:rgba(45,212,167,.5);color:var(--accent)}
 .map-gold-alt:hover{border-color:var(--accent);background:rgba(45,212,167,.14)}
-.map-gold-alt b{background:rgba(45,212,167,.2)}
+.map-gold-alt b{background:var(--accent-chip)}
 .map-gold-alt.is-on{
   background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
   box-shadow:0 4px 18px rgba(45,212,167,.3);
@@ -621,46 +690,46 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .fuso{font-style:normal;opacity:.75}
 
 /* ===== sem preço confirmado: a busca vira o caminho em destaque ========= */
-.dcol-ouro h4{color:#ffd24a}
+.dcol-ouro h4{color:var(--gold)}
 .book-abas.is-ouro .aba{
   border-color:rgba(255,210,74,.55);background:rgba(255,210,74,.08);
-  box-shadow:0 0 0 1px rgba(255,210,74,.2);
+  box-shadow:0 0 0 1px var(--gold-bg-forte);
 }
-.book-abas.is-ouro .aba b{color:#ffd24a}
+.book-abas.is-ouro .aba b{color:var(--gold)}
 .book-abas.is-ouro .aba:hover{
-  border-color:#ffd24a;background:rgba(255,210,74,.16);
+  border-color:var(--gold);background:rgba(255,210,74,.16);
 }
-.book-abas.is-ouro .aba:hover b{color:#ffd24a}
+.book-abas.is-ouro .aba:hover b{color:var(--gold)}
 
 /* ============ alternativa: voo direto num destino vizinho =============== */
 .alt-direto{
   display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;
   text-align:left;cursor:pointer;margin-bottom:8px;
   padding:9px 11px;border-radius:10px;
-  background:rgba(255,210,74,.07);border:1px solid rgba(255,210,74,.45);
+  background:var(--gold-bg);border:1px solid var(--gold-line);
   color:var(--txt);transition:.15s;
 }
-.alt-direto:hover{background:rgba(255,210,74,.14);border-color:#ffd24a}
+.alt-direto:hover{background:var(--gold-bg-forte);border-color:var(--gold)}
 .alt-tag{
   grid-column:1/-1;font-size:9px;font-weight:800;letter-spacing:.05em;
-  text-transform:uppercase;color:#ffd24a;margin-bottom:2px;
+  text-transform:uppercase;color:var(--gold);margin-bottom:2px;
 }
 .alt-nome{font-size:12.5px}
 .alt-nome b{font-weight:700}
 .alt-meta{grid-column:1;font-size:10.5px;color:var(--txt-faint)}
-.alt-preco{grid-row:2/4;grid-column:2;align-self:center;text-align:right;font-size:14px;font-weight:700;color:#ffd24a}
+.alt-preco{grid-row:2/4;grid-column:2;align-self:center;text-align:right;font-size:14px;font-weight:700;color:var(--gold)}
 .alt-preco small{display:block;font-size:9.5px;font-weight:500;color:var(--txt-faint)}
-.alt-ir{grid-column:1/-1;margin-top:5px;font-size:10.5px;font-weight:700;color:#ffd24a;opacity:.6;transition:opacity .15s}
+.alt-ir{grid-column:1/-1;margin-top:5px;font-size:10.5px;font-weight:700;color:var(--gold);opacity:.6;transition:opacity .15s}
 .alt-direto:hover .alt-ir{opacity:1}
 
 /* voo direto saindo de um aeroporto vizinho — melhor que escala */
 .conexao.conexao-direta{
-  background:rgba(255,210,74,.07);border-color:rgba(255,210,74,.45);border-style:solid;
+  background:var(--gold-bg);border-color:var(--gold-line);border-style:solid;
 }
-.tag-direto{background:#ffd24a!important;color:#3a2c00!important}
-.conexao-direta .conexao-head b{color:#ffd24a}
-.conexao-direta a.perna.is-link:hover{background:rgba(255,210,74,.12);border-color:#ffd24a}
-.conexao-direta a.perna.is-link .perna-preco small{color:#ffd24a}
+.tag-direto{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
+.conexao-direta .conexao-head b{color:var(--gold)}
+.conexao-direta a.perna.is-link:hover{background:var(--gold-bg-forte);border-color:var(--gold)}
+.conexao-direta a.perna.is-link .perna-preco small{color:var(--gold)}
 
 /* campo "para onde quer ir" */
 .opcional{
@@ -676,15 +745,15 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .caminho{padding-bottom:10px}
 .caminho + .caminho{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .caminho:hover{background:rgba(255,255,255,.02);border-radius:8px}
-.tag-escala{background:var(--origin)!important;color:#04203f!important}
+.tag-escala{background:var(--origin)!important;color:var(--origin-ink)!important}
 .caminho[data-caminho=escala] .conexao-head b{color:var(--origin)}
 .selo-barato{
   font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
-  background:rgba(45,212,167,.18);color:var(--accent);padding:2px 7px;border-radius:10px;
+  background:var(--accent-chip);color:var(--accent);padding:2px 7px;border-radius:10px;
 }
 .ver-destino{
   display:inline-block;margin-top:4px;border:0;background:none;cursor:pointer;
-  color:#ffd24a;font-size:11px;font-weight:700;padding:0;
+  color:var(--gold);font-size:11px;font-weight:700;padding:0;
 }
 .ver-destino:hover{text-decoration:underline}
 
@@ -702,22 +771,25 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
   margin:0;padding:11px 13px;border-radius:10px;border:1px solid var(--line);
 }
 .conexao.duas-opcoes .caminho + .caminho{margin-top:0;border-top:1px solid var(--line);padding-top:11px}
-.caminho-ouro{background:rgba(255,210,74,.07);border-color:rgba(255,210,74,.45)!important}
-.caminho-verde{background:rgba(45,212,167,.07);border-color:rgba(45,212,167,.45)!important}
-.caminho-ouro .conexao-head b{color:#ffd24a}
+.caminho-ouro{background:var(--gold-bg);border-color:var(--gold-line)!important}
+.caminho-verde{background:var(--accent-bg);border-color:var(--accent-line)!important}
+.caminho-ouro .conexao-head b{color:var(--gold)}
 .caminho-verde .conexao-head b{color:var(--accent)}
-.tag-ouro{background:#ffd24a!important;color:#3a2c00!important}
+.tag-ouro{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
 .tag-verde{background:var(--accent)!important;color:var(--accent-ink)!important}
 
 .selo-rapido,.selo-duplo{
   font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
   padding:2px 7px;border-radius:10px;
-  background:rgba(255,210,74,.18);color:#ffd24a;
+  background:var(--gold-bg-forte);color:var(--gold);
 }
-.selo-duplo{background:linear-gradient(90deg,rgba(255,210,74,.2),rgba(45,212,167,.2));color:var(--txt)}
+.selo-duplo{background:linear-gradient(90deg,var(--gold-bg-forte),var(--accent-chip));color:var(--txt)}
 
 /* a grade se reorganiza quando a coluna de busca sai */
-.dgrid-sem-busca{grid-template-columns:minmax(220px,.7fr) 1.6fr}
+/* Sem coluna de busca (preço confirmado), o conteúdo ocupa a largura toda:
+   é o que dá espaço para os dois caminhos ficarem lado a lado sem apertar. */
+.dgrid-sem-busca{grid-template-columns:1fr}
+.dgrid-sem-busca.dgrid-both{grid-template-columns:2.2fr minmax(230px,1fr)}
 @media (max-width:1180px){ .conexao.duas-opcoes{grid-template-columns:1fr} }
 
 /* botão que dispara a busca de caminhos (em vez de buscar sozinho) */
@@ -736,7 +808,7 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .pin-star-vazia{color:rgba(255,210,74,.85)}
 .pin.pin-direto{box-shadow:0 0 0 1.5px rgba(255,210,74,.55), 0 3px 10px rgba(0,0,0,.5)}
 .dot-star-vazia{color:rgba(255,210,74,.85)}
-.tip-direto{color:#ffd24a;font-size:11px;opacity:.9}
+.tip-direto{color:var(--gold);font-size:11px;opacity:.9}
 
 /* ============ RADAR DE VARREDURA ============
    Anéis que se abrem a partir da origem enquanto os preços reais chegam.
@@ -769,3 +841,49 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
   .map-fare[data-kind="varrendo"] b,
   .map-fare[data-kind="loading"] span{animation:none}
 }
+
+/* ============ CABEÇALHO DOS CARDS DE CAMINHO ============================
+   O preço migrou para a direita do cabeçalho, na linha do título. Antes ele
+   vinha depois do selo, no meio de uma linha que embrulhava — e o número, que
+   é o critério da comparação, aparecia em posições diferentes em cada card.
+   Ancorado no mesmo canto dos dois, a pessoa compara com um movimento de olho
+   só, sem reler nada. */
+.conexao-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:nowrap;
+}
+.conexao-id{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.conexao-id small{flex-basis:100%;font-size:10.5px;color:var(--txt-faint);line-height:1.35}
+.conexao-preco{
+  font-size:21px;font-weight:750;letter-spacing:-.02em;line-height:1.1;
+  flex:none;white-space:nowrap;
+}
+.caminho-ouro .conexao-preco{color:var(--gold)}
+.caminho-verde .conexao-preco{color:var(--accent)}
+
+/* ============ AJUSTES DO TEMA CLARO ==================================== */
+/* O realce de hover era um branco translúcido — invisível sobre fundo claro. */
+.caminho:hover{background:#18222f08;border-radius:8px}
+/* O anel de seleção do pin era branco: sobre mapa claro não se via. */
+.pin.is-selected{
+  box-shadow:0 0 0 3px var(--txt), 0 3px 12px rgba(23,43,77,.28);
+  z-index:1000!important;
+}
+/* As pílulas do mapa ficam sobre fotos de terreno de todos os tons: a borda
+   clara garante que o recorte apareça tanto sobre mar quanto sobre cidade. */
+.pin{border-color:#ffffffd9;box-shadow:0 2px 8px rgba(23,43,77,.28)}
+.pin.pin-real{box-shadow:0 0 0 2px var(--gold-solid), 0 2px 9px rgba(23,43,77,.3)}
+.leaflet-control-attribution{background:#ffffffc4!important}
+
+/* ============ BOTÃO DE LIMPAR SELEÇÃO ==================================
+   Mora junto dos filtros do mapa, mas em cinza: é uma saída, não uma opção
+   de busca — competir em cor com os filtros dourado e verde faria a pessoa
+   lê-lo como "mais um filtro". Só aparece quando há algo a desfazer. */
+.map-limpar{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 13px;border-radius:20px;cursor:pointer;
+  background:var(--overlay);backdrop-filter:blur(8px);
+  border:1.5px solid var(--line);color:var(--txt-dim);
+  font-size:12px;font-weight:650;box-shadow:var(--shadow);transition:.15s;
+}
+.map-limpar:hover{border-color:var(--over);color:var(--over);background:var(--panel)}
+.map-limpar i{font-style:normal;font-size:11px;line-height:1}

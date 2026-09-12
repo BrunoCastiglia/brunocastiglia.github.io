@@ -175,8 +175,57 @@ export function nearestAirports(airports, point, maxKm = 260, limite = 3) {
 /* ---------------------------------------------------------------- datas -- */
 const iso = d => d.toISOString().slice(0, 10);
 
+/**
+ * Datas exatas escolhidas no calendário, quando a pessoa usa esse modo.
+ *
+ * Mora no módulo, e não nos parâmetros, porque `searchWindow` é chamada de
+ * dentro de meia dúzia de funções que só conhecem mês e duração — passar as
+ * datas por todas elas espalharia o mesmo argumento por toda a cadeia sem
+ * ninguém no meio usá-lo. É uma escolha única da pessoa, e vale para a busca
+ * inteira.
+ *
+ * `volta` pode vir vazia: significa volta em aberto, e a janela de retorno
+ * volta a ser larga.
+ */
+let datasFixas = null;
+
+export function definirDatas(ida, volta) {
+  datasFixas = ida ? { ida, volta: volta || null } : null;
+}
+
+/**
+ * Identifica a janela atual para as chaves de cache.
+ *
+ * Sem isso, duas datas diferentes dentro do mesmo mês e com a mesma duração
+ * compartilhariam a chave e uma leria a tarifa da outra.
+ */
+export function chaveJanela(month, days) {
+  return datasFixas
+    ? `d${datasFixas.ida}_${datasFixas.volta || 'aberta'}`
+    : `${month}.${days}`;
+}
+
 /** Janela de busca para o mês escolhido, respeitando a data de hoje. */
 export function searchWindow(month, days) {
+  // Modo calendário: a ida é aquele dia, sem margem. A volta é o dia pedido
+  // ou, se ficou em aberto, um mês inteiro a partir da ida.
+  if (datasFixas) {
+    const ida = datasFixas.ida;
+    const volta = datasFixas.volta;
+    const depois = n => {
+      const d = new Date(ida + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + n);
+      return iso(d);
+    };
+    return {
+      outFrom: ida, outTo: ida,
+      inFrom:  volta || depois(1),
+      inTo:    volta || depois(30),
+      valid:   true,
+      exata:   true,
+    };
+  }
+
   const now = new Date();
   const year = month < now.getMonth() ? now.getFullYear() + 1 : now.getFullYear();
 
@@ -216,7 +265,7 @@ export async function fetchFares(originIata, month, days, signal, destinos = nul
   if (!w.valid) return new Map();
 
   const alvos = destinos?.length ? [...destinos].sort().join(',') : '';
-  const key = `${CACHE_FARES}${originIata}.${month}.${days}.${alvos || 'all'}`;
+  const key = `${CACHE_FARES}${originIata}.${chaveJanela(month, days)}.${alvos || 'all'}`;
   const cached = readCache(key, TTL_FARES);
   if (cached) return new Map(cached);
 
@@ -226,8 +275,10 @@ export async function fetchFares(originIata, month, days, signal, destinos = nul
     outboundDepartureDateTo:   w.outTo,
     inboundDepartureDateFrom:  w.inFrom,
     inboundDepartureDateTo:    w.inTo,
-    durationFrom: Math.max(1, days - 1),
-    durationTo:   days + 1,
+    // Com as datas presas, quem decide a duração são elas: manter a margem de
+    // ±1 dia aqui só arrisca descartar um voo que cabe exatamente no pedido.
+    durationFrom: w.exata ? 1  : Math.max(1, days - 1),
+    durationTo:   w.exata ? 90 : days + 1,
     currency: 'EUR',
     limit: 20,          // máximo aceito pela API
     offset: 0,
@@ -402,9 +453,13 @@ export async function legFare(from, to, month, days, signal, depoisDe = null, an
   // Quando há hora mínima (é a segunda perna, ou a volta), a janela acompanha
   // essa data em vez de parar no fim do mês escolhido: a volta de quem parte
   // dia 25 cai no mês seguinte, e cortar ali fazia o trajeto sair "só ida".
+  //
+  // No modo calendário a primeira perna não tem essa folga: a pessoa escolheu
+  // um dia para sair, e sair dois dias depois não serve. Só as pernas seguintes
+  // (que já têm `depoisDe`) mantêm a margem, porque são a conexão em si.
   const limitePadrao = depoisDe
     ? new Date(new Date(depoisDe).getTime() + 12 * 864e5).toISOString().slice(0, 10)
-    : w.inTo;
+    : (w.exata ? w.outTo : w.inTo);
   const fim = antesDe ? antesDe.slice(0, 10) : limitePadrao;
   if (inicio > fim) return null;
 

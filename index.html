@@ -14,7 +14,7 @@
 
 <link rel="preconnect" href="https://basemaps.cartocdn.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="assets/css/style.css?v=7">
+<link rel="stylesheet" href="assets/css/style.css?v=10">
 
 <!-- ===== ANÚNCIOS =====
      Quando sua conta do Google AdSense for aprovada, descomente a linha abaixo
@@ -82,20 +82,46 @@
         <p class="hint">A barra vai até <b id="rangeMaxLabel">€ 1.000</b> — acima disso, digite o valor no campo.</p>
       </div>
 
-      <div class="grid-2">
-        <div class="field">
-          <label for="days">Dias de viagem</label>
-          <input type="number" id="days" name="days" min="1" max="90" value="7" required>
-        </div>
-        <div class="field">
-          <label for="people">Viajantes</label>
-          <input type="number" id="people" name="people" min="1" max="8" value="1" required>
+      <div class="field">
+        <label>Quando você viaja?</label>
+        <div class="seg seg-wide" role="group" aria-label="Como informar as datas">
+          <button type="button" class="seg-btn is-active" data-quando="duracao">Por duração</button>
+          <button type="button" class="seg-btn" data-quando="datas">Por datas</button>
         </div>
       </div>
 
+      <!-- modo duração: quantos dias, em que mês -->
+      <div class="quando-bloco" id="blocoDuracao">
+        <div class="grid-2">
+          <div class="field">
+            <label for="days">Dias de viagem</label>
+            <input type="number" id="days" name="days" min="1" max="90" value="7" required>
+          </div>
+          <div class="field">
+            <label for="month">Mês</label>
+            <select id="month" name="month"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- modo datas: dias exatos de ida e de volta -->
+      <div class="quando-bloco" id="blocoDatas" hidden>
+        <div class="grid-2">
+          <div class="field">
+            <label for="dataIda">Ida</label>
+            <input type="date" id="dataIda" name="dataIda">
+          </div>
+          <div class="field">
+            <label for="dataVolta">Volta <i class="opcional">opcional</i></label>
+            <input type="date" id="dataVolta" name="dataVolta">
+          </div>
+        </div>
+        <p class="hint" id="datasHint">Deixe a volta vazia para ver qualquer retorno no mês seguinte.</p>
+      </div>
+
       <div class="field">
-        <label for="month">Quando?</label>
-        <select id="month" name="month"></select>
+        <label for="people">Viajantes</label>
+        <input type="number" id="people" name="people" min="1" max="8" value="1" required>
       </div>
 
       <div class="field">
@@ -118,7 +144,6 @@
         <p class="hint" id="styleHint">Hostel ou quarto compartilhado; voo low cost, só bagagem de mão.</p>
       </div>
 
-      <button type="submit" class="btn-primary" id="btnSearch">Encontrar destinos</button>
     </form>
 
     <!-- Slot de anúncio (lateral) -->
@@ -144,6 +169,10 @@
       </button>
       <button type="button" class="map-gold map-gold-alt" id="btnDireto" aria-pressed="false">
         <i>✈</i><span>Só voo direto</span><b id="countDireto"></b>
+      </button>
+      <button type="button" class="map-limpar" id="btnLimparSelecao" hidden
+              title="Voltar ao mapa sem seleção">
+        <i>✕</i><span>Limpar seleção</span>
       </button>
     </div>
 
@@ -206,6 +235,6 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script type="module" src="assets/js/app.js?v=7"></script>
+<script type="module" src="assets/js/app.js?v=10"></script>
 </body>
 </html>

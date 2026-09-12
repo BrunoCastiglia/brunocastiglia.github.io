@@ -300,11 +300,12 @@ Booking e Airbnb já vão com cidade, datas e número de hóspedes preenchidos.
 
 ## O mapa é gratuito mesmo?
 
-Sim: **tiles raster do OpenStreetMap**, sem chave, escurecidos por um filtro CSS
-aplicado só em `.leaflet-tile-pane` (os marcadores ficam em painel irmão e não
-são invertidos).
+Sim: **tiles raster do OpenStreetMap**, sem chave. Um filtro CSS aplicado só em
+`.leaflet-tile-pane` tira parte da saturação (os marcadores ficam em painel
+irmão e não são afetados), para que as pílulas coloridas de preço sejam a única
+coisa saturada na tela — o mapa é o pano de fundo, o preço é o dado.
 
-Chegamos a usar o **OpenFreeMap** (vetorial, tema escuro nativo, gratuito e sem
+Chegamos a usar o **OpenFreeMap** (vetorial, gratuito e sem
 limite) através do plugin `maplibre-gl-leaflet`. Ficava mais bonito, mas o plugin
 desenha o basemap num canvas maior que o container e, ao arrastar ou dar zoom
 out, o mapa saía do lugar em relação aos marcadores — cidades europeias
@@ -328,7 +329,7 @@ provedor com plano próprio — a política do OSM não cobre volume.
 
 ```
 index.html                     layout: topo · lateral esquerda · mapa · barra inferior
-assets/css/style.css           tema escuro, responsivo
+assets/css/style.css           tema claro, responsivo
 assets/js/app.js               controlador (formulário, mapa, lista, detalhes)
 assets/js/engine.js            MOTOR DE CUSTO — distância, sazonalidade, preço do voo
 assets/js/fx.js                câmbio EUR/USD/BRL + moeda local do destino
@@ -411,9 +412,16 @@ estimativa por último:
    espera no aeroporto;
 3. **Estimativa de mercado** — por último, e dita como estimativa.
 
-Ao abrir um destino, a barra inferior cresce sozinha até caber tudo (no máximo
-metade da tela), a não ser que você tenha fixado uma altura arrastando a alça —
-aí a sua escolha manda.
+Ao abrir um destino, a barra inferior cresce sozinha até **caber a informação
+inteira sem rolagem** (no máximo 62% da tela). A medida vai até o fim da grade
+de conteúdo e ignora a faixa de anúncios que vem depois: incluí-la fazia a conta
+estourar o teto, e o que sobrava espremido era justamente o conteúdo. Anúncio
+abaixo da dobra é normal; o preço do voo não pode estar.
+
+Os caminhos alternativos chegam segundos depois do clique, então a medida é
+refeita quando eles aparecem — senão a opção recém-encontrada nascia fora da
+tela. Uma altura fixada à mão vira **piso**, não teto: você continua mandando no
+tamanho da barra, mas nunca fica com menos do que a informação precisa.
 
 ## Filtrar só o que tem preço confirmado
 
@@ -484,12 +492,36 @@ A linha "Estimativa de mercado" saiu de vez: repetia o número que já está no
 Resumo e levava ao mesmo Google do botão ao lado. Quando não há preço confirmado,
 entra só uma nota sóbria dizendo que o valor do resumo é estimativa.
 
-A última coluna virou **Pesquisar voo**, com a busca do Google apresentada como
-aba. Quando **não há nenhum preço confirmado** para a rota — nem voo direto, nem
-trajeto com escala — essa coluna inteira ganha o destaque dourado e passa a ser
-o caminho principal da tela. A ideia é que a pessoa não veja um beco sem saída,
-e sim o atalho para procurar por conta própria. Assim que uma conexão com preços
-reais é encontrada, o destaque sai e volta para o trajeto.
+A busca do Google é a **última saída, e só quando não há saída melhor**. Ela
+desaparece assim que existe preço confirmado: no voo direto, quando a tarifa
+chega; nos caminhos alternativos, quando eles são encontrados. Mandar a pessoa
+pesquisar de novo o que ela acabou de receber pronto é ruído, e o espaço que a
+coluna ocupava volta para os cards — que foi o que os deixou lado a lado sem
+apertar (430 px → 598 px de largura cada).
+
+Quando **não há nenhum preço confirmado** — nem voo direto, nem trajeto com
+escala — a coluna inteira ganha o destaque dourado e passa a ser o caminho
+principal da tela: a pessoa não vê um beco sem saída, e sim o atalho para
+procurar por conta própria.
+
+### O total saiu do corpo do painel
+
+Havia uma coluna "Resumo" com o total em corpo 27 — o mesmo número que já estava
+no cabeçalho da barra, e o mesmo tipo de número que cada card mostra. Três
+apresentações do mesmo dado, e a maior delas era a menos útil: ninguém compara
+opções pelo total do destino, compara pelo preço de cada caminho.
+
+Sobrou uma faixa de uma linha com o que o cabeçalho não diz — quanto sobra do
+orçamento e a divisão voo/hospedagem, esta só quando há as duas coisas. O total
+ficou onde já estava: no título.
+
+### O preço de cada card vive no mesmo canto
+
+Nos cards de caminho o preço ficava depois do selo, no meio de uma linha que
+embrulhava — e acabava em posições diferentes em cada card. Ancorado no canto
+superior direito dos dois, a comparação é um movimento de olho só, sem releitura.
+É a mesma razão de o preço de cada opção de voo e de hospedagem ter subido para
+19 px e ido para o alto da linha, em vez de centralizado.
 
 ### As opções aparecem juntas, não escolhidas por nós
 
@@ -619,6 +651,22 @@ que sobraram são aeroportos regionais sem destino turístico próprio.
 Vale repetir esse cruzamento sempre que a malha mudar — o script está no
 histórico e leva segundos.
 
+## Sair da seleção
+
+Fechar a barra pelo cabeçalho só a recolhia: o destino seguia escolhido, o arco
+continuava desenhado e o pino, destacado. Voltar a "olhar o mapa inteiro" exigia
+clicar em outro lugar qualquer — um jeito de sair que a pessoa descobre por
+acidente, não por desenho.
+
+O botão **✕ Limpar seleção** aparece no mapa junto dos filtros, em cinza: é uma
+saída, não mais um filtro, e competir em cor com o dourado e o verde faria ser
+lido como um. Ele desfaz a seleção, apaga o arco, recolhe a barra e some sozinho
+quando não há nada a limpar. **Esc** faz o mesmo.
+
+O formulário não é tocado — origem, orçamento e datas são o contexto da pessoa,
+não a seleção. Só o destino digitado sai junto, porque é ele que prende o mapa a
+um lugar só.
+
 ## O arco fica enquanto o destino estiver escolhido
 
 Passar o mouse desenha o arco; **clicar fixa**. Enquanto houver um destino
@@ -641,6 +689,30 @@ possibilidades, não como garantia.
 
 A lateral esquerda tem apenas os campos da busca. A lista de destinos saiu: o
 mapa é a lista, e o detalhe aparece na barra de baixo ao clicar num destino.
+
+**Não há botão de pesquisar.** O mapa refaz a conta a cada campo alterado, com
+320 ms de espera para não recalcular a cada tecla. Um botão ali seria um passo a
+mais entre mudar o orçamento e ver o efeito — e o efeito é o produto.
+
+### Duração ou datas
+
+São dois jeitos de dizer quando a viagem é, e a pessoa escolhe qual encaixa:
+
+- **Por duração** — sete dias em setembro, qualquer semana serve. A busca varre
+  o mês inteiro atrás da tarifa mais barata. É o modo de quem ainda está
+  escolhendo para onde ir.
+- **Por datas** — parte neste dia, volta naquele. A janela da consulta passa a
+  ser exata e o filtro de duração é desligado (com as datas presas, a margem de
+  ±1 dia só arriscava descartar um voo que cabia). É o modo de quem já tem as
+  férias marcadas. A volta pode ficar vazia: aí o retorno é qualquer dia do mês
+  seguinte.
+
+O campo "Quando?" desapareceu do modo datas — o mês já está na data da ida, e
+pedir a mesma informação duas vezes é um convite a contradizê-las.
+
+As datas exatas ficam em `RYA.definirDatas` e entram na chave de cache por
+`chaveJanela`: sem isso, duas datas diferentes do mesmo mês com a mesma duração
+compartilhariam a chave e uma leria a tarifa da outra.
 
 ## A abertura do mapa
 
@@ -665,13 +737,33 @@ Na prática, saindo de Olbia com €900: a área da abertura mostra 45 destinos,
 afastando para o mundo todo vão a 132, e um zoom na Itália deixa 2 (Roma e
 Nápoles). O título da lista diz sempre "N cabem nesta área".
 
-Nada reenquadra o mapa por conta própria — nem o botão *Encontrar destinos*, nem
-trocar de moeda ou de filtro. O enquadramento é de quem está navegando; quem se
+Nada reenquadra o mapa por conta própria — nem mexer nos campos, nem trocar de
+moeda ou de filtro. O enquadramento é de quem está navegando; quem se
 ajusta é a busca. A única exceção é a animação de abertura.
 
 Ao clicar num destino o mapa desliza até ele, mas isso **não** dispara nova
 busca: movimentos feitos pelo próprio site são marcados com `state.ignorarMove`
 para a lista não se refazer sozinha a cada clique.
+
+## Tema claro
+
+A paleta é clara por escolha, não por ausência de tema escuro — esse virá depois,
+como opção. Duas decisões que o claro impõe e o escuro escondia:
+
+**O verde da marca tem dois papéis.** `#2dd4a7` tem contraste de 2,1:1 sobre
+branco: serve de fundo de pílula, não de texto. No claro ele escureceu para
+`#0d9a72` (texto legível) e o tom vivo migrou para os fundos (`--accent-bg`,
+`--accent-chip`). O mesmo vale para o dourado do preço confirmado, que virou dois
+valores: `--gold-solid` para fundo de selo e `--gold` para texto e borda. Usar um
+tom só nos dois papéis era o que sumia na tela branca.
+
+**O fundo não é branco puro.** `#f4f6f8`: papel branco atrás de texto escuro
+cansa a vista, e um cinza de 2% já tira o brilho. Os painéis, esses brancos,
+ganham profundidade por contraste com o fundo, sem precisar de sombra pesada.
+
+Os tiles do mapa, que antes eram invertidos para virar mapa escuro, agora só
+perdem parte da saturação — o mapa vira pano de fundo calmo e as pílulas de preço
+ficam sendo a única coisa saturada da tela, que é onde o olho deve cair primeiro.
 
 ## Detalhes da interface
 
@@ -695,9 +787,7 @@ destino e volta a recolher quando a seleção é limpa. O aviso de
 responsabilidade acompanha — fica escondido com a barra recolhida e continua
 acessível pelo "?" no topo.
 
-Quando aberta, tem um tamanho discreto — 20% da altura da tela,
-entre 180 px e 260 px — que mostra o texto de ajuda e a faixa de anúncios sem
-comer o mapa.
+Quando aberta, parte de um tamanho discreto e cresce até o necessário.
 
 Tem uma alça na borda de cima: **arraste para escolher quanto espaço ela ocupa**
 (entre 150 px e 80% da tela) e **duplo clique volta ao padrão**. A altura
@@ -742,7 +832,7 @@ npx vercel --prod
 
 ## Serviços externos usados (todos gratuitos e sem chave)
 
-- **OpenFreeMap** — mapa vetorial escuro, sem limite de uso
+- **OpenFreeMap** — mapa vetorial, sem limite de uso
 - **OpenStreetMap** — tiles raster do fallback e busca de cidades (Nominatim)
 - **Ryanair Fare Finder** — preços reais de voo
 - **frankfurter.dev** (Banco Central Europeu) — câmbio do dia, com tabela de reserva
