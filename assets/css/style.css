@@ -684,3 +684,24 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .combo-item small b{color:var(--accent);font-weight:600}
 .perna-terra{border-top:1px dashed var(--line);margin-top:4px;padding-top:8px!important}
 .perna-terra .perna-voo{color:var(--accent)!important}
+
+/* ============ opções de caminho lado a lado ============================ */
+.caminho{padding-bottom:10px}
+.caminho + .caminho{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.caminho:hover{background:rgba(255,255,255,.02);border-radius:8px}
+.tag-escala{background:var(--origin)!important;color:#04203f!important}
+.caminho[data-caminho=escala] .conexao-head b{color:var(--origin)}
+.selo-barato{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  background:rgba(45,212,167,.18);color:var(--accent);padding:2px 7px;border-radius:10px;
+}
+.ver-destino{
+  display:inline-block;margin-top:4px;border:0;background:none;cursor:pointer;
+  color:#ffd24a;font-size:11px;font-weight:700;padding:0;
+}
+.ver-destino:hover{text-decoration:underline}
+
+/* Com a barra recolhida, a tela é só o mapa e o formulário: o aviso longo
+   some junto e volta ao abrir um destino. Ele continua acessível no "?". */
+.details[data-state=collapsed] .aviso-legal{display:none}
+.details[data-state=collapsed] .details-handle{padding:9px 16px}

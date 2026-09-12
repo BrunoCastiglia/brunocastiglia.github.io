@@ -173,12 +173,12 @@
   </main>
 
   <!-- ============ BARRA INFERIOR DE DETALHES ============ -->
-  <footer class="details" id="details" data-state="open">
+  <footer class="details" id="details" data-state="collapsed">
     <div class="details-resizer" id="detailsResizer"
          title="Arraste para ajustar a altura · duplo clique para o padrão"></div>
 
-    <button type="button" class="details-handle" id="detailsHandle" aria-expanded="true">
-      <span class="details-handle-title" id="detailsTitle">Selecione um destino no mapa</span>
+    <button type="button" class="details-handle" id="detailsHandle" aria-expanded="false">
+      <span class="details-handle-title" id="detailsTitle">Clique num destino do mapa para ver os voos</span>
       <span class="details-handle-chevron" aria-hidden="true">▲</span>
     </button>
 
@@ -210,6 +210,11 @@
   <p>Você diz quanto tem, de onde sai, por quantos dias e em que mês. Nós cruzamos <b>preço do voo</b> e <b>preço de hospedagem</b> de cada cidade para mostrar no mapa aonde esse dinheiro te leva. Você escolhe se a conta inclui os dois, só o voo ou só a hospedagem.</p>
   <p>Onde existe rota da <b>Ryanair</b>, o voo é <b>preço real</b>, buscado na hora, com as datas e link para reservar — esses aparecem com o selo <b>real</b>. Nas outras rotas, e na hospedagem, o valor é estimado.</p>
   <p class="note"><b>Comida e passeios ficam de fora de propósito:</b> esse gasto varia demais de pessoa para pessoa e uma estimativa ali só atrapalharia a escolha do destino.</p>
+  <p class="note"><b>Sobre as reservas.</b> Este site não vende passagens nem faz
+    reservas: os links abrem o site da companhia ou um buscador, em nova aba, e a
+    compra acontece lá — <b>cada reserva é de responsabilidade de quem a faz</b>.
+    Trajetos com escala são bilhetes separados, sem proteção de conexão.</p>
+
   <form method="dialog"><button class="btn-primary">Entendi</button></form>
 </dialog>
 

@@ -371,18 +371,24 @@ o caminho principal da tela. A ideia é que a pessoa não veja um beco sem saíd
 e sim o atalho para procurar por conta própria. Assim que uma conexão com preços
 reais é encontrada, o destaque sai e volta para o trajeto.
 
-### A ordem de recomendação
+### As opções aparecem juntas, não escolhidas por nós
 
-Quando o destino não tem voo direto da origem, o site tenta nesta ordem — e
-para na primeira que resolver:
+Um voo direto de um aeroporto vizinho é imbatível, então quando existe é o que
+aparece. Fora isso, **quem escolhe é quem viaja**: as duas alternativas são
+buscadas em paralelo e mostradas uma sob a outra, com o preço de cada uma e um
+selo no mais barato.
 
-1. **Voo direto de um aeroporto vizinho da origem** (até 400 km)
-2. **Voo até uma cidade vizinha + o último trecho por terra** (até 350 km)
-3. **Trajeto com escala** pela malha da companhia, no máximo 28 h de espera
-4. **Busca no Google**, em destaque dourado
+| Opção | Quando importa |
+|---|---|
+| **★ voo + ônibus** | mais barato, um voo só, mas com trecho de estrada |
+| **✈ só de avião, com escala** | para quem não quer pegar ônibus |
 
-A ordem não é arbitrária: um voo só vale mais que duas escalas, mesmo que exija
-algumas horas de estrada.
+Passar o mouse por uma delas desenha aquele caminho no mapa. Para Amsterdã
+saindo de Olbia, por exemplo, a escala via Dublin sai por € 83 e o voo até
+Bruxelas mais ônibus por € 122 — quem prefere não pegar ônibus agora vê a opção,
+que antes o site escondia ao parar na primeira que encontrava.
+
+Se nada disso existe, a **busca no Google** assume o destaque dourado.
 
 O passo 2 é o caminho que as pessoas realmente fazem. Para **Santiago de
 Compostela saindo de Olbia**, o site oferecia uma escala de € 219 só de ida; a
@@ -563,7 +569,13 @@ alto o arco.
 
 ## Altura da barra inferior
 
-A barra abre junto com o site, num tamanho discreto — 20% da altura da tela,
+A barra **abre recolhida**: no primeiro acesso a tela é só o mapa e o
+formulário, com uma faixa de 48 px embaixo. Ela se abre sozinha ao clicar num
+destino e volta a recolher quando a seleção é limpa. O aviso de
+responsabilidade acompanha — fica escondido com a barra recolhida e continua
+acessível pelo "?" no topo.
+
+Quando aberta, tem um tamanho discreto — 20% da altura da tela,
 entre 180 px e 260 px — que mostra o texto de ajuda e a faixa de anúncios sem
 comer o mapa.
 

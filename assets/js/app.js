@@ -588,7 +588,7 @@ const VERDICT = {
 
 function clearDetails() {
   state.selected = null;
-  $('#detailsTitle').textContent = 'Selecione um destino no mapa';
+  $('#detailsTitle').textContent = 'Clique num destino do mapa para ver os voos';
   $('#detailsBody').innerHTML =
     `<p class="empty">Clique em um ponto do mapa ou em um destino da lista para ver as opções de voo e hospedagem.</p>
      <div class="ad-strip" aria-hidden="true">
@@ -597,8 +597,10 @@ function clearDetails() {
        <div class="ad-slot" data-ad="strip3"></div>
      </div>`;
   mountAllAds($('#detailsBody'));
-  // a barra continua aberta na altura escolhida: fechá-la aqui fazia o rodapé
-  // sumir sozinho sempre que a seleção era limpa
+  // Sem destino escolhido não há o que mostrar: a barra fica recolhida e a
+  // tela é só o mapa e o formulário. Ela se abre sozinha ao clicar num destino.
+  $('#details').dataset.state = 'collapsed';
+  $('#detailsHandle').setAttribute('aria-expanded', 'false');
 }
 
 function renderDetails(r) {
@@ -671,31 +673,14 @@ function renderDetails(r) {
   // Resumo e levava ao mesmo Google do botão ao lado, com um destaque verde
   // que competia com o do preço confirmado. Ficam só as opções reais.
   const flights = P.flightOptions(r, ctx).filter(o => !o.estimativa);
-
-  // Sem voo direto para este destino, oferecemos o aeroporto vizinho que tem.
-  const alt = (!r.real && !r.useGround && mode.flight) ? vooDiretoPerto(r) : null;
-
-  // Voar até a cidade vizinha e fazer o último trecho por terra costuma ser o
-  // caminho real: Porto fica a 3 h de ônibus de Santiago de Compostela, e isso
-  // resolve melhor que uma escala de avião do outro lado da Europa.
-  const terra = alt ? P.groundLeg(alt.km) : null;
-  const altRow = alt ? `
-    <button type="button" class="alt-direto" data-alt="${esc(alt.dest.id)}">
-      <span class="alt-tag">★ voo direto até perto + ${esc(terra.modo)}</span>
-      <span class="alt-nome">
-        Voe até <b>${esc(alt.dest.city)}</b> e siga ${alt.km} km
-        até ${esc(r.dest.city)} — ${esc(terra.tempo)} de ${esc(terra.modo)}
-      </span>
-      <span class="alt-meta">${esc(alt.fare.ida?.flight || '')} · ${
-        alt.fare.ida?.minutos ? fmtDuracao(alt.fare.ida.minutos) + ' de voo' : 'voo direto'} ·
-        parte de ${esc(alt.fare.saida?.iata || alt.fare.originIata || '')} ·
-        ${esc(terra.modo)} ida e volta ≈ ${fmt(terra.preco)}</span>
-      <span class="alt-preco">${fmt(alt.fare.price + terra.preco)}<small>voo + ${esc(terra.modo)}</small></span>
-      <span class="alt-ir">ver ${esc(alt.dest.city)} →</span>
-    </button>` : '';
   const stays   = P.stayOptions(r, ctx);
   const links   = bookingLinks(state.origin, r, state.month)
                     .filter(l => (mode.flight && l.kind === 'flight') || (mode.stay && l.kind === 'stay'));
+
+  // Sem voo direto para este destino, oferecemos o aeroporto vizinho que tem.
+  // A sugestão de cidade vizinha vive na caixa de caminhos (#conexaoBox), que
+  // é montada depois com voos, preços e links. Ter as duas mostrava a mesma
+  // informação duas vezes na tela.
 
   $('#detailsBody').innerHTML = `
     <div class="dgrid dgrid-${r.mode}">
@@ -716,7 +701,6 @@ function renderDetails(r) {
       <section class="dcol">
         <h4>Como chegar · ${r.useGround ? 'rota terrestre' : `${Math.round(r.km).toLocaleString('pt-BR')} km`}</h4>
         ${realRow}
-        ${altRow}
         <div class="conexao" id="conexaoBox" hidden></div>
         ${flights.map(optRow).join('')}
         ${(!r.real && !r.useGround) ? `
@@ -902,129 +886,41 @@ async function buscarConexao(r) {
     return;
   }
 
-  // Segundo: voar até uma cidade vizinha e fazer o resto por terra.
-  const comTerra = await vooMaisTerra(r, signal);
+  // Sem voo direto, as duas alternativas são buscadas juntas e mostradas lado
+  // a lado: quem não quer pegar ônibus precisa ver a opção só de avião, e quem
+  // não quer escala precisa ver a de ônibus. A escolha é de quem viaja.
+  const [comTerra, comEscala] = await Promise.all([
+    vooMaisTerra(r, signal),
+    buscarEscala(r, ordem, destApt, signal),
+  ]);
   if (signal.aborted || state.selected !== alvo) return;
-  if (comTerra) {
-    mostrarVooMaisTerra(comTerra, r);
+
+  if (comTerra || comEscala) {
+    mostrarCaminhos({ comTerra, comEscala, r, destApt, apt });
     return;
   }
 
-  // Compara as duas saídas mais próximas em vez de ficar com a primeira que
-  // funcionar: parar na primeira levava a trajetos de € 179 saindo de um
-  // aeroporto a 195 km, quando o aeroporto local resolvia por menos.
+  if (caixa) caixa.hidden = true;   // nenhum caminho encontrado
+}
+
+/**
+ * Trajeto só de avião, com escala. Compara as duas saídas mais próximas em vez
+ * de ficar com a primeira que funcionar: parar na primeira levava a trajetos
+ * saindo de um aeroporto a 195 km quando o local resolvia por menos.
+ */
+async function buscarEscala(r, ordem, destApt, signal) {
   const achadas = [];
   for (const partida of ordem.slice(0, 2)) {
     if (partida.iata === destApt.iata) continue;
     const achada = await RYA.findConnection(
       partida, destApt, state.airports, state.month, state.days, signal,
     );
-    if (signal.aborted) return;
+    if (signal?.aborted) return null;
     if (achada) { achada.partida = partida; achadas.push(achada); }
   }
-
   // entre trajetos parecidos, o que sai de perto de casa leva vantagem
   const custo = t => t.total + (t.partida?.km || 0) * 0.05;
-  const c = achadas.sort((a, b) => custo(a) - custo(b))[0] || null;
-  if (signal.aborted || state.selected !== alvo) return;
-
-  if (!c) { if (caixa) caixa.hidden = true; return; }
-
-  state.conexao = { ...c, destId: alvo, origem: apt, destino: destApt };
-  realcarBusca(false);          // há preços reais nas pernas: busca sai do destaque
-
-  /* Um único critério para a espera, usado tanto na seta entre os voos quanto
-     na explicação — antes a seta dizia "2 dias" e o texto "uma noite". */
-  const faixa = min => !Number.isFinite(min) ? 'desconhecida'
-    : min <= 720  ? 'curta'      // até 12 h: troca de avião no mesmo dia
-    : 'noite';                   // o motor não devolve escala acima de 28 h
-
-  const emTexto = min => {
-    switch (faixa(min)) {
-      case 'desconhecida': return 'troca de voo';
-      case 'curta':  return min < 60 ? `${min} min de espera` : `${fmtDuracao(min)} de espera`;
-      default:       return 'uma noite na cidade';
-    }
-  };
-
-  const longa = min => faixa(min) !== 'curta' && Number.isFinite(min);
-
-  /* Diz o que a espera significa na prática, e onde a pessoa passaria o tempo. */
-  const explicar = min => {
-    const onde = esc(c.hub.city);
-    switch (faixa(min)) {
-      case 'desconhecida': return '';
-      case 'curta':  return `troca de avião em ${onde}, no mesmo dia`;
-      default:       return `uma noite em ${onde} entre os voos`;
-    }
-  };
-
-  // Cada perna é um link: são bilhetes separados, então a pessoa precisa
-  // abrir e comprar um de cada vez.
-  const perna = p => `
-    <a class="perna is-link" href="${RYA.legBookingUrl(p, r.people)}"
-       target="_blank" rel="noopener nofollow">
-      <span class="perna-rota">
-        <b>${esc(p.from)}</b> → <b>${esc(p.to)}</b>
-        <i class="perna-voo">${esc(p.flight || '')}</i>
-      </span>
-      <span class="perna-data">${fmtDataHora(p.depart)} → ${fmtHora(p.arrive)}
-        ${p.minutos > 0 ? `· ${fmtDuracao(p.minutos)}` : '<i class="fuso">· horários locais</i>'}</span>
-      <span class="perna-preco">${fmt(p.price)}<small>reservar →</small></span>
-    </a>`;
-
-  const bloco = (pernas, esperaMin, rotulo, tipo) => !pernas ? '' : `
-    <div class="conexao-bloco">
-      <div class="conexao-rot">${rotulo}</div>
-      ${perna(pernas[0])}
-      <span class="perna-seta${longa(esperaMin) ? ' is-longa' : ''}">
-        ↓ <i>escala em ${esc(c.hub.iata)} · ${emTexto(esperaMin)}</i>
-      </span>
-      ${perna(pernas[1])}
-    </div>`;
-
-  const dias = diasDoTrajeto(c);
-  const avisos = [];
-  const naIda = explicar(c.esperaMin);
-  const naVolta = c.pernasVolta ? explicar(c.esperaVoltaMin) : '';
-  if (naIda)   avisos.push(`Na ida, ${naIda}.`);
-  if (naVolta) avisos.push(`Na volta, ${naVolta}.`);
-  if ([c.esperaMin, c.esperaVoltaMin].filter(m => faixa(m) === 'noite').length) {
-    avisos.push('A espera passa de 12 h: conte com uma noite de hospedagem na cidade da escala.');
-  }
-  if (c.voltaAmpliada && dias) {
-    avisos.push(`Não há volta por esta rota nos ${r.days} dias pedidos: a opção encontrada
-      deixa <b>${dias} dias fora</b>.`);
-  }
-  const avisoEspera = avisos.join(' ');
-
-  caixa.innerHTML = `
-    <div class="conexao-head">
-      <span class="conexao-tag">trajeto com escala</span>
-      <b>${fmt(c.total)}</b>
-      <small>${c.completa
-        ? `ida e volta, 4 trechos${dias ? ` · ${dias} dias fora` : ''}`
-        : 'só ida — sem volta disponível nesta janela'}</small>
-    </div>
-
-    ${bloco(c.pernas, c.esperaMin, `ida · ${fmt(c.idaTotal)}`, c.tipoIda)}
-    ${c.pernasVolta ? bloco(c.pernasVolta, c.esperaVoltaMin, `volta · ${fmt(c.voltaTotal)}`, c.tipoVolta) : ''}
-
-    <p class="conexao-nota">
-      Sem voo direto de ${esc(c.partida?.iata || apt.iata)} para ${esc(destApt.iata)}.
-      Pela malha da Ryanair dá para chegar parando em
-      <b>${esc(c.hub.city)} (${esc(c.hub.iata)})</b>${
-        c.partida && c.partida.km > 40 ? `, saindo de ${esc(c.partida.iata)} (a ${c.partida.km} km de você)` : ''}.
-      São <b>bilhetes separados</b>, um por trecho: clique em cada voo para reservar.
-      A conexão não é garantida pela companhia — se um voo atrasar, o seguinte se perde.
-      ${avisoEspera}
-    </p>`;
-
-  // trajeto completo: de onde a pessoa está, pela escala, até o destino
-  const paradas = [state.origin];
-  if (c.partida && c.partida.km > 40) paradas.push(c.partida);
-  paradas.push(c.hub, r.dest);
-  fixarCaminho(alvo, paradas);
+  return achadas.sort((a, b) => custo(a) - custo(b))[0] || null;
 }
 
 /**
@@ -1094,53 +990,133 @@ function mostrarDiretoDeLonge(d, destApt, r) {
   fixarCaminho(r.dest.id, [state.origin, d.saida, r.dest]);
 }
 
-/** Mostra o caminho "voe até X, siga por terra até Y". */
-function mostrarVooMaisTerra(c, r) {
-  const caixa = $('#conexaoBox');
-  if (!caixa) return;
+/* ---------------------------------------------- caminhos alternativos ---- */
 
-  const linha = (p, rotulo) => p ? `
-    <a class="perna is-link" href="${RYA.legBookingUrl(p, r.people)}"
+/** Uma perna de voo, clicável, com horários e preço. */
+function pernaVoo(p, rotulo, people) {
+  if (!p) return '';
+  return `
+    <a class="perna is-link" href="${RYA.legBookingUrl(p, people)}"
        target="_blank" rel="noopener nofollow">
       <span class="perna-rota"><b>${esc(p.from)}</b> → <b>${esc(p.to)}</b>
         <i class="perna-voo">${esc(p.flight || '')}</i></span>
       <span class="perna-data">${rotulo} · ${fmtDataHora(p.depart)} → ${fmtHora(p.arrive)}
         ${p.minutos > 0 ? `· ${fmtDuracao(p.minutos)}` : ''}</span>
-      <span class="perna-preco">${fmt(p.price)}</span>
-    </a>` : '';
+      <span class="perna-preco">${fmt(p.price)}<small>reservar →</small></span>
+    </a>`;
+}
 
-  const buscaTerra = 'https://www.google.com/search?' + new URLSearchParams({
-    q: `ônibus ou trem de ${c.d.city} para ${r.dest.city}`, hl:'pt-BR',
-  });
+/**
+ * Monta os caminhos possíveis até o destino, um abaixo do outro.
+ *
+ * Não escolhemos por quem viaja: quem não quer pegar ônibus precisa ver a
+ * opção só de avião, e quem não quer escala precisa ver a de ônibus. As duas
+ * aparecem, com o preço de cada uma, e o mapa desenha a que estiver sob o
+ * ponteiro.
+ */
+function mostrarCaminhos({ comTerra, comEscala, r, destApt, apt }) {
+  const caixa = $('#conexaoBox');
+  if (!caixa) return;
+
+  const opcoes = [];
+
+  if (comTerra) {
+    opcoes.push({
+      chave: 'terra',
+      tag: `★ voo + ${comTerra.terra.modo}`,
+      total: comTerra.total,
+      resumo: `voo ida e volta + ${comTerra.terra.modo}`,
+      corpo: `
+        ${pernaVoo(comTerra.fare.ida, 'ida', r.people)}
+        ${pernaVoo(comTerra.fare.volta, 'volta', r.people)}
+        <a class="perna is-link perna-terra"
+           href="${googleTerra(comTerra.d.city, r.dest.city)}" target="_blank" rel="noopener nofollow">
+          <span class="perna-rota"><b>${esc(comTerra.d.city)}</b> → <b>${esc(r.dest.city)}</b>
+            <i class="perna-voo">${esc(comTerra.terra.modo)}</i></span>
+          <span class="perna-data">${comTerra.km} km · cerca de ${esc(comTerra.terra.tempo)} por trecho</span>
+          <span class="perna-preco">${fmt(comTerra.terra.preco)}<small>buscar →</small></span>
+        </a>`,
+      nota: `Um voo só até <b>${esc(comTerra.d.city)}</b> e ${esc(comTerra.terra.tempo)}
+             de ${esc(comTerra.terra.modo)} até ${esc(r.dest.city)}. O valor do
+             ${esc(comTerra.terra.modo)} é estimativa; confira no buscador.`,
+      acao: `<button type="button" class="ver-destino" data-alt="${esc(comTerra.d.id)}">ver ${esc(comTerra.d.city)} →</button>`,
+      pontos: [state.origin, comTerra.saida, comTerra.d, r.dest],
+    });
+  }
+
+  if (comEscala) {
+    const c = comEscala;
+    const espera = min => !Number.isFinite(min) ? 'troca de voo'
+      : min <= 720 ? (min < 60 ? `${min} min de espera` : `${fmtDuracao(min)} de espera`)
+      : 'uma noite na cidade';
+
+    const bloco = (pernas, esperaMin, rotulo) => !pernas ? '' : `
+      <div class="conexao-rot">${rotulo}</div>
+      ${pernaVoo(pernas[0], 'voo 1', r.people)}
+      <span class="perna-seta${esperaMin > 720 ? ' is-longa' : ''}">
+        ↓ <i>escala em ${esc(c.hub.iata)} · ${espera(esperaMin)}</i>
+      </span>
+      ${pernaVoo(pernas[1], 'voo 2', r.people)}`;
+
+    const paradas = [state.origin];
+    if (c.partida && c.partida.km > 40) paradas.push(c.partida);
+    paradas.push(c.hub, r.dest);
+
+    opcoes.push({
+      chave: 'escala',
+      tag: '✈ só de avião, com escala',
+      total: c.total,
+      resumo: c.completa ? 'ida e volta, 4 trechos' : 'só ida — sem volta nesta janela',
+      corpo: bloco(c.pernas, c.esperaMin, `ida · ${fmt(c.idaTotal)}`)
+        + (c.pernasVolta ? bloco(c.pernasVolta, c.esperaVoltaMin, `volta · ${fmt(c.voltaTotal)}`) : ''),
+      nota: `Sem ônibus: tudo de avião, parando em <b>${esc(c.hub.city)}</b>.
+             São <b>bilhetes separados</b> — a conexão não é garantida pela companhia,
+             e um atraso faz perder o voo seguinte.`,
+      acao: '',
+      pontos: paradas,
+    });
+  }
+
+  if (!opcoes.length) { caixa.hidden = true; return; }
+
+  opcoes.sort((a, b) => a.total - b.total);
+  const maisBarato = opcoes[0].total;
 
   caixa.classList.add('conexao-direta');
-  caixa.innerHTML = `
-    <div class="conexao-head">
-      <span class="conexao-tag tag-direto">★ voo até perto + ${esc(c.terra.modo)}</span>
-      <b>${fmt(c.total)}</b><small>voo ida e volta + ${esc(c.terra.modo)}</small>
-    </div>
-    <div class="conexao-bloco">
-      ${linha(c.fare.ida, 'ida')}
-      ${linha(c.fare.volta, 'volta')}
-      <a class="perna is-link perna-terra" href="${buscaTerra}" target="_blank" rel="noopener nofollow">
-        <span class="perna-rota"><b>${esc(c.d.city)}</b> → <b>${esc(r.dest.city)}</b>
-          <i class="perna-voo">${esc(c.terra.modo)}</i></span>
-        <span class="perna-data">${c.km} km · cerca de ${esc(c.terra.tempo)} por trecho</span>
-        <span class="perna-preco">${fmt(c.terra.preco)}<small>buscar →</small></span>
-      </a>
-    </div>
-    <p class="conexao-nota">
-      Não há voo até ${esc(r.dest.city)}, mas <b>${esc(c.d.city)}</b> fica a
-      ${c.km} km — cerca de ${esc(c.terra.tempo)} de ${esc(c.terra.modo)}. Costuma
-      sair melhor que uma escala de avião: um voo só e o resto por terra.
-      O valor do ${esc(c.terra.modo)} é estimativa; confira no buscador.
-    </p>`;
+  caixa.innerHTML = opcoes.map(o => `
+    <div class="caminho" data-caminho="${o.chave}">
+      <div class="conexao-head">
+        <span class="conexao-tag ${o.chave === 'terra' ? 'tag-direto' : 'tag-escala'}">${o.tag}</span>
+        <b>${fmt(o.total)}</b><small>${esc(o.resumo)}</small>
+        ${o.total === maisBarato && opcoes.length > 1 ? '<span class="selo-barato">mais barato</span>' : ''}
+      </div>
+      <div class="conexao-bloco">${o.corpo}</div>
+      <p class="conexao-nota">${o.nota} ${o.acao}</p>
+    </div>`).join('');
+
+  // passar o mouse por uma opção desenha aquele caminho no mapa
+  caixa.querySelectorAll('.caminho').forEach(el => {
+    const o = opcoes.find(x => x.chave === el.dataset.caminho);
+    el.addEventListener('mouseenter', () => desenharCaminho(o.pontos));
+    el.addEventListener('mouseleave', () => desenharRotaFixa());
+  });
+  caixa.querySelector('[data-alt]')?.addEventListener('click', e => {
+    e.stopPropagation();
+    select(e.currentTarget.dataset.alt, { fly:true });
+  });
 
   state.conexao = null;
   realcarBusca(false);
-  // origem → aeroporto de partida → cidade vizinha → destino final
-  fixarCaminho(r.dest.id, [state.origin, c.saida, c.d, r.dest]);
+  fixarCaminho(r.dest.id, opcoes[0].pontos);
 }
+
+const googleTerra = (de, para) => 'https://www.google.com/search?' + new URLSearchParams({
+  q: `ônibus ou trem de ${de} para ${para}`, hl:'pt-BR',
+});
+
+
+
+
 
 
 
