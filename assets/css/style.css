@@ -21,7 +21,7 @@
   --origin:#63a8ff;
   --radius:12px;
   --sidebar-w:352px;
-  --details-h:clamp(180px, 20vh, 260px);
+  --details-h:clamp(92px, 10vh, 132px);
   --shadow:0 10px 30px rgba(0,0,0,.45);
   --font:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }

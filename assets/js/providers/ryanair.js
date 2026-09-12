@@ -18,6 +18,7 @@
    ======================================================================== */
 
 import { distanceKm } from '../engine.js';
+import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js';
 
 const AIRPORTS_URL = 'https://www.ryanair.com/api/views/locate/5/airports/en/active';
 const FARES_URL    = 'https://services-api.ryanair.com/farfnd/v4/roundTripFares';
@@ -105,11 +106,18 @@ export function nearestAirport(airports, point, maxKm = 150) {
  * é mostrada na tela, para a pessoa julgar se compensa.
  */
 export function nearestAirports(airports, point, maxKm = 260, limite = 3) {
-  return airports
+  const perto = airports
     .map(a => ({ ...a, km: Math.round(distanceKm(point, a)) }))
     .filter(a => a.km <= maxKm)
-    .sort((a, b) => a.km - b.km)
-    .slice(0, limite);
+    .sort((a, b) => a.km - b.km);
+
+  // Só aeroportos alcançáveis por terra. Quem está na Sardenha não "sai de
+  // Pisa": são 300 km em linha reta com o mar Tirreno no meio.
+  const porTerra = perto.filter(a => ligadosPorTerra(point, a));
+
+  // Numa ilha sem aeroporto nenhum, voltamos aos mais próximos e a tela avisa
+  // a distância — é melhor que não oferecer nada.
+  return (porTerra.length ? porTerra : perto).slice(0, limite);
 }
 
 /* ---------------------------------------------------------------- datas -- */
@@ -127,14 +135,21 @@ export function searchWindow(month, days) {
   const min = new Date(Date.now() + 3 * 864e5);
   const outFrom = first < min ? min : first;
 
-  const outTo = new Date(last); outTo.setUTCDate(outTo.getUTCDate() - days);
+  // A ida pode ser em qualquer dia do mês escolhido, inclusive no último.
+  // Antes a janela terminava em "fim do mês menos os dias de viagem", para a
+  // volta caber no mesmo mês — e isso descartava voos legítimos: quem escolhe
+  // setembro e parte dia 30 volta em outubro, o que é perfeitamente normal.
+  // Cagliari→Porto só voa dia 30, e sumia por causa disso.
   const inFrom = new Date(outFrom); inFrom.setUTCDate(inFrom.getUTCDate() + days - 1);
+
+  // a volta pode passar do mês; damos margem para a duração pedida
+  const inTo = new Date(last); inTo.setUTCDate(inTo.getUTCDate() + days + 5);
 
   return {
     outFrom: iso(outFrom),
-    outTo:   iso(outTo > outFrom ? outTo : outFrom),
+    outTo:   iso(last),
     inFrom:  iso(inFrom),
-    inTo:    iso(last),
+    inTo:    iso(inTo),
     valid:   outFrom <= last,
   };
 }
@@ -590,9 +605,12 @@ export async function directFromNearbyAirport(
   origin, destApt, airports, month, days, signal, jaUsados = [], maxKm = 400,
 ) {
   const usados = new Set(jaUsados);
+  const mesmaIlha = massaDeTerra(origin);
   const candidatos = airports
     .map(a => ({ ...a, km: Math.round(distanceKm(origin, a)) }))
     .filter(a => !usados.has(a.iata) && a.iata !== destApt.iata && a.km <= maxKm)
+    // o aeroporto alternativo tem de ser alcançável de carro ou ônibus
+    .filter(a => massaDeTerra(a) === mesmaIlha)
     .sort((a, b) => a.km - b.km)
     .slice(0, 8);
 

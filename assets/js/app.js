@@ -5,6 +5,7 @@
 import { DESTINATIONS, TAG_LABELS } from './data/destinations.js';
 import { searchLocal, searchRemote, norm } from './data/origins.js';
 import * as GEO from './data/geo.js';
+import { ligadosPorTerra } from './data/landmass.js';
 import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js';
 import * as FX from './fx.js';
 import * as P from './providers/index.js';
@@ -147,7 +148,7 @@ function desenharRotaFixa({ animar = false } = {}) {
   if (state.caminho?.destId === state.selected) {
     desenharCaminho(state.caminho.pontos, { animar });
   } else if (state.origin) {
-    desenharCaminho([state.origin, r.dest], { animar });
+    desenharCaminho(pontosDoVoo(r), { animar });
   }
 }
 
@@ -196,40 +197,29 @@ function desenharCaminho(pontos, { animar = true } = {}) {
   }
 }
 
-/** Curva de A até B com a barriga proporcional à distância na tela. */
-function mostrarRota(dest) {
-  if (!state.origin || !svgRota) return;
-  const a = map.latLngToContainerPoint([state.origin.lat, state.origin.lon]);
-  const b = map.latLngToContainerPoint([dest.lat, dest.lon]);
+/**
+ * Pontos do trajeto de um destino: onde a pessoa está, o aeroporto de onde o
+ * voo realmente parte, o aeroporto onde ele pousa e a cidade de destino.
+ *
+ * Um voo que sai de Cagliari não pode ser desenhado saindo de Olbia, e um que
+ * pousa em Génova não termina em Turim — os trechos por terra fazem parte do
+ * caminho e precisam aparecer no mapa.
+ */
+function pontosDoVoo(r) {
+  const pontos = [state.origin];
+  const saida = r?.real?.saida;
+  const chegada = r?.real?.airport;
 
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist < 12) return;
+  if (saida && distanciaSimples(state.origin, saida) > 25) pontos.push(saida);
+  if (chegada && r.dest && distanciaSimples(chegada, r.dest) > 25) pontos.push(chegada);
+  pontos.push(r.dest || r);
+  return pontos;
+}
 
-  // ponto de controle perpendicular ao meio do trajeto: dá a sensação de arco
-  const altura = Math.min(160, 24 + dist * 0.22);
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-  const cx = mx - (dy / dist) * altura;
-  const cy = my + (dx / dist) * altura;
-
-  const d = `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
-  pathRota.setAttribute('d', d);
-  pathSombra.setAttribute('d', d);
-
-  // reinicia o traço para a linha ser "desenhada" a cada vez
-  const comp = pathRota.getTotalLength();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'none';
-    el.style.strokeDasharray = comp;
-    el.style.strokeDashoffset = comp;
-  }
-  svgRota.classList.add('is-on');
-  // força o navegador a assumir o estado inicial antes de animar
-  void pathRota.getBoundingClientRect();
-  for (const el of [pathRota, pathSombra]) {
-    el.style.transition = 'stroke-dashoffset .55s cubic-bezier(.32,.72,.3,1)';
-    el.style.strokeDashoffset = '0';
-  }
+/** Arco do trajeto ao passar o mouse, já com os trechos por terra. */
+function mostrarRota(r) {
+  if (!state.origin) return;
+  desenharCaminho(pontosDoVoo(r));
 }
 
 function pinIcon(html, cls) {
@@ -270,7 +260,7 @@ function drawResults() {
       { direction:'top', offset:[0,-14], className:'dest-tip' },
     );
     m.on('click', () => select(r.dest.id, { fly:false }));
-    m.on('mouseover', () => mostrarRota(r.dest));
+    m.on('mouseover', () => mostrarRota(r));
     m.on('mouseout', esconderRota);
     m.addTo(layerDest);
     markers.set(r.dest.id, m);
@@ -790,7 +780,7 @@ function vooDiretoPerto(r, maxKm = 350) {
   for (const [destId, fare] of state.realFares) {
     if (destId === r.dest.id) continue;
     const d = DESTINATIONS.find(x => x.id === destId);
-    if (!d) continue;
+    if (!d || !ligadosPorTerra(d, r.dest)) continue;   // precisa ter estrada
     const km = Math.round(distanciaSimples(d, r.dest));
     if (km > maxKm) continue;
     if (!melhor || km < melhor.km) melhor = { dest:d, fare, km };
@@ -820,6 +810,8 @@ function realcarBusca(ligado) {
 async function vooMaisTerra(r, signal, maxKm = 350) {
   const vizinhos = DESTINATIONS
     .filter(d => d.id !== r.dest.id)
+    // o trecho final é de ônibus: as duas cidades têm de estar na mesma terra
+    .filter(d => ligadosPorTerra(d, r.dest))
     .map(d => ({ d, km: Math.round(distanciaSimples(d, r.dest)) }))
     .filter(v => v.km <= maxKm)
     .sort((a, b) => a.km - b.km)
@@ -895,12 +887,17 @@ async function buscarConexao(r) {
 
   // Primeiro: existe voo DIRETO saindo de um aeroporto um pouco mais longe?
   // Um voo só de Cagliari costuma valer mais que duas escalas saindo de Olbia.
+  // Nenhum aeroporto é excluído aqui, nem os que já usamos como saída: a
+  // consulta geral de cada saída traz só os 20 destinos mais baratos, e a
+  // varredura país a país roda apenas nas duas mais próximas. Cagliari voa
+  // direto para o Porto, mas isso não aparecia em nenhuma das duas listas —
+  // excluir as saídas fazia o site perder justamente o voo que resolvia.
   const direto = await RYA.directFromNearbyAirport(
-    state.origin, destApt, state.airports, state.month, state.days, signal,
-    saidas.map(x => x.iata),
+    state.origin, destApt, state.airports, state.month, state.days, signal, [],
   );
   if (signal.aborted || state.selected !== alvo) return;
   if (direto) {
+    registrarTarifaEncontrada(r.dest.id, direto, destApt);
     mostrarDiretoDeLonge(direto, destApt, r);
     return;
   }
@@ -1028,6 +1025,32 @@ async function buscarConexao(r) {
   if (c.partida && c.partida.km > 40) paradas.push(c.partida);
   paradas.push(c.hub, r.dest);
   fixarCaminho(alvo, paradas);
+}
+
+/**
+ * Guarda a tarifa achada sob demanda junto com as demais.
+ *
+ * Assim o destino passa a contar como "preço confirmado": ganha a estrela no
+ * mapa, entra no filtro de voo direto e o card mostra o valor real em vez da
+ * estimativa — sem precisar refazer a busca inteira.
+ */
+function registrarTarifaEncontrada(destId, direto, destApt) {
+  if (state.realFares.has(destId)) return;
+  state.realFares.set(destId, {
+    iata: destApt.iata,
+    price: direto.price,
+    ida: direto.ida,
+    volta: direto.volta,
+    outDate: direto.ida?.depart?.slice(0, 10),
+    inDate: direto.volta?.depart?.slice(0, 10),
+    originIata: direto.saida.iata,
+    saida: direto.saida,
+    airport: destApt,
+    airportKm: 0,
+  });
+  state.viaEscala.delete(destId);
+  setFareStatus('ok');
+  search({ refit:false });
 }
 
 /**

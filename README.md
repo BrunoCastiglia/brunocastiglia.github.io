@@ -412,10 +412,21 @@ saídas (uma requisição cada), varredura país a país só nas duas mais próx
 rede de escalas nas três primeiras. A caixa do mapa mostra de quais aeroportos
 as tarifas realmente vieram.
 
-> **Limitação conhecida:** a distância é em linha reta. Saindo de uma ilha, um
-> aeroporto "a 250 km" pode exigir balsa ou voo — Roma aparece a 250 km de Olbia
-> com o mar no meio. A tela sempre mostra a distância, mas não sabe se existe
-> estrada.
+### Distância em linha reta não é distância de estrada
+
+Sugerir Pisa para quem está na Sardenha é mandar a pessoa pegar uma balsa de
+sete horas sem avisar. `assets/js/data/landmass.js` guarda a caixa geográfica de
+cada ilha relevante da malha, e dois pontos só contam como ligados por terra
+quando estão na mesma massa — a mesma ilha, ou os dois no continente.
+
+Isso vale em todo lugar onde o site sugere deslocamento por terra: aeroportos de
+partida alternativos, o aeroporto vizinho com voo direto e o último trecho de
+ônibus. De Olbia as saídas passaram a ser só **OLB, AHO e CAG** — Figari (na
+Córsega) e Roma saíram, apesar de estarem perto em linha reta.
+
+Não é um mapa de estradas: é uma salvaguarda contra o erro grosseiro de ignorar
+o mar. Numa ilha sem aeroporto nenhum o site volta aos mais próximos e mostra a
+distância, porque não oferecer nada seria pior.
 
 ### Três aeroportos de partida não bastavam
 
