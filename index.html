@@ -2,41 +2,260 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bruno Castiglia</title>
-<meta name="description" content="Projetos publicados por Bruno Castiglia.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MoneyToGo — para onde seu dinheiro te leva</title>
+<meta name="description" content="Diga quanto você tem, de onde sai e por quantos dias. Mostramos no mapa todos os destinos que cabem no seu orçamento, com voo e hospedagem já calculados — e preço real de voo quando existe.">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232dd4a7'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' text-anchor='middle' fill='%2304231b'%3E€%3C/text%3E%3C/svg%3E">
 
-<!-- AdSense: a verificação é do domínio brunocastiglia.github.io, e o Google
-     busca o script na raiz — ter só em /moneytogo/ não basta. -->
+<meta property="og:title" content="MoneyToGo — para onde seu dinheiro te leva">
+<meta property="og:description" content="Descubra no mapa todos os destinos que cabem no seu orçamento de viagem — voo e hospedagem.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://basemaps.cartocdn.com">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="assets/css/style.css?v=39">
+
+<!-- ===== ANÚNCIOS =====
+     O script precisa estar na página para o Google conseguir revisar o site.
+     Ele sozinho já habilita os anúncios automáticos, que são ligados e
+     desligados no painel do AdSense, não aqui.
+     Os blocos manuais (barra lateral e faixa inferior) só entram quando os
+     IDs de bloco forem preenchidos em assets/js/ads.js. -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8514640441352876" crossorigin="anonymous"></script>
-<style>
-  :root{color-scheme:light}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;
-    background:#f4f6f8;color:#18222f;
-    font:16px/1.6 "Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  main{max-width:520px;padding:32px 24px;text-align:center}
-  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
-  p{color:#5b6b7e;margin:0 0 22px;font-size:14px}
-  a.projeto{display:inline-flex;align-items:center;gap:10px;text-decoration:none;
-    background:#fff;border:1px solid #dfe4ea;border-radius:12px;padding:14px 18px;
-    color:#18222f;font-weight:650;box-shadow:0 6px 20px rgba(23,43,77,.10)}
-  a.projeto:hover{border-color:#0a7d5c}
-  a.projeto span{font-weight:400;color:#5b6b7e;font-size:13px}
-  .marca{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;
-    background:linear-gradient(140deg,#0a7d5c,#0b7f80);color:#fff;font-weight:800}
-  .rodape{margin:26px 0 0;font-size:12px}
-  .rodape a{color:#5b6b7e}
-</style>
 </head>
 <body>
-<main>
-  <h1>Bruno Castiglia</h1>
-  <p>Projetos publicados aqui.</p>
-  <a class="projeto" href="/moneytogo/">
-    <span class="marca" aria-hidden="true">◎</span>
-    MoneyToGo <span>— para onde seu dinheiro te leva</span>
-  </a>
-  <p class="rodape"><a href="/moneytogo/privacidade.html">Privacidade</a></p>
-</main>
+
+<!-- ============ BARRA SUPERIOR ============
+     Primeiro passo: de onde, para onde e — em destaque — quanto se tem.
+     O orçamento é o que o site responde, então ganha a linha inteira e o
+     maior controle da tela. Data, viajantes e o resto vêm depois, na lateral. -->
+<header class="topbar">
+
+  <div class="topbar-linha topbar-linha-1">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◎</span>
+      <div class="brand-text">
+        <strong>MoneyToGo</strong>
+        <small>para onde seu dinheiro te leva</small>
+      </div>
+    </div>
+
+    <div class="topbar-lugares">
+      <div class="field field-topo">
+        <label for="origin">De onde você sai?</label>
+        <div class="combo">
+          <input type="text" id="origin" name="origin" placeholder="Ex.: Lisboa, São Paulo, Berlim…" required>
+          <button type="button" id="btnLocate" class="locate-btn"
+                  title="Usar minha localização" aria-label="Usar minha localização">➤</button>
+          <div class="combo-list" id="originList" role="listbox" hidden></div>
+        </div>
+        <p class="hint" id="originHint">Digite pelo menos 3 letras.</p>
+      </div>
+
+      <div class="field field-topo">
+        <label for="destino">Para onde quer ir? <i class="opcional">opcional</i></label>
+        <div class="combo">
+          <input type="text" id="destino" name="destino" placeholder="Deixe vazio para ver tudo no mapa">
+          <button type="button" id="btnLimparDestino" class="locate-btn" hidden
+                  title="Limpar destino" aria-label="Limpar destino">✕</button>
+          <div class="combo-list" id="destinoList" role="listbox" hidden></div>
+        </div>
+        <p class="hint" id="destinoHint">Se não houver voo até lá, buscamos o ponto mais próximo que dá para alcançar.</p>
+      </div>
+    </div>
+
+    <button type="button" class="icon-btn" id="btnHelp" aria-label="Como funciona">?</button>
+  </div>
+
+  <div class="topbar-linha topbar-linha-2">
+    <div class="seg seg-moeda" role="group" aria-label="Moeda">
+      <button type="button" class="seg-btn is-active" data-currency="EUR">€ EUR</button>
+      <button type="button" class="seg-btn" data-currency="USD">$ USD</button>
+      <button type="button" class="seg-btn" data-currency="BRL">R$ BRL</button>
+    </div>
+
+    <div class="orcamento">
+      <label for="budgetRange" class="orcamento-rotulo">Quanto você tem para viajar?</label>
+      <input type="range" id="budgetRange" min="50" max="1000" step="25" value="200"
+             aria-label="Orçamento">
+    </div>
+
+    <div class="orcamento-valor">
+      <div class="money">
+        <span class="money-symbol" id="curSymbol">€</span>
+        <input type="number" id="budget" name="budget" min="20" step="25" value="200" required>
+      </div>
+      <p class="hint">barra até <b id="rangeMaxLabel">€ 1.000</b></p>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ============ BARRA LATERAL ESQUERDA ============
+       Segundo passo: quando, com quantos, e o que entra na conta. -->
+  <aside class="sidebar" id="sidebar">
+    <form class="panel" id="tripForm" autocomplete="off">
+
+      <div class="field">
+        <label>Quando você viaja?</label>
+        <div class="seg seg-wide" role="group" aria-label="Como informar as datas">
+          <button type="button" class="seg-btn is-active" data-quando="duracao">Por duração</button>
+          <button type="button" class="seg-btn" data-quando="datas">Por datas</button>
+        </div>
+      </div>
+
+      <!-- modo duração: quantos dias, em que mês -->
+      <div class="quando-bloco" id="blocoDuracao">
+        <div class="grid-2">
+          <div class="field">
+            <label for="days">Dias de viagem</label>
+            <input type="number" id="days" name="days" min="1" max="90" value="7" required>
+          </div>
+          <div class="field">
+            <label for="month">Mês</label>
+            <select id="month" name="month"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- modo datas: dias exatos de ida e de volta -->
+      <div class="quando-bloco" id="blocoDatas" hidden>
+        <div class="grid-2">
+          <div class="field">
+            <label for="dataIda">Ida</label>
+            <input type="date" id="dataIda" name="dataIda">
+          </div>
+          <div class="field">
+            <label for="dataVolta">Volta <i class="opcional">opcional</i></label>
+            <input type="date" id="dataVolta" name="dataVolta">
+          </div>
+        </div>
+        <p class="hint" id="datasHint">Deixe a volta vazia para ver qualquer retorno no mês seguinte.</p>
+      </div>
+
+      <div class="field">
+        <label for="people">Viajantes</label>
+        <input type="number" id="people" name="people" min="1" max="8" value="1" required>
+      </div>
+
+      <div class="field">
+        <label>O que entra na conta</label>
+        <div class="seg seg-wide seg-stack" role="group">
+          <button type="button" class="seg-btn is-active" data-mode="flight">Só o voo</button>
+          <button type="button" class="seg-btn" data-mode="both">Voo + hospedagem</button>
+          <button type="button" class="seg-btn" data-mode="stay">Só hospedagem</button>
+        </div>
+        <p class="hint">Comida e passeios ficam de fora: variam demais de pessoa para pessoa.</p>
+      </div>
+
+      <div class="field">
+        <label>Estilo de viagem</label>
+        <div class="seg seg-wide" role="group">
+          <button type="button" class="seg-btn is-active" data-style="0">Econômico</button>
+          <button type="button" class="seg-btn" data-style="1">Equilibrado</button>
+          <button type="button" class="seg-btn" data-style="2">Conforto</button>
+        </div>
+        <p class="hint" id="styleHint">Hostel ou quarto compartilhado; voo low cost, só bagagem de mão.</p>
+      </div>
+    </form>
+
+    <!-- Slot de anúncio (lateral) -->
+    <aside class="ad-slot" data-ad="sidebar" aria-label="Publicidade"></aside>
+
+  </aside>
+
+  <!-- ============ MAPA ============ -->
+  <main class="map-wrap">
+    <div id="map" role="application" aria-label="Mapa de destinos"></div>
+
+    <div class="map-overlay map-stats" id="mapStats" hidden>
+      <div><b id="statFit">0</b><span>cabem no orçamento</span></div>
+      <div><b id="statTight">0</b><span>quase lá</span></div>
+      <div><b id="statOver">0</b><span>acima</span></div>
+    </div>
+
+    <div class="map-overlay map-fare" id="fareStatus" hidden></div>
+
+    <div class="map-filtros" id="mapFiltros" hidden>
+      <button type="button" class="map-gold" id="btnConfirmado" aria-pressed="false">
+        <i>★</i><span>Só preço confirmado</span><b id="countConfirmado"></b>
+      </button>
+      <button type="button" class="map-gold map-gold-alt" id="btnDireto" aria-pressed="false">
+        <i>✈</i><span>Só voo direto</span><b id="countDireto"></b>
+      </button>
+      <button type="button" class="map-limpar" id="btnLimparSelecao" hidden
+              title="Voltar ao mapa sem seleção">
+        <i>✕</i><span>Limpar seleção</span>
+      </button>
+    </div>
+
+    <div class="map-overlay map-legend">
+      <span><i class="dot dot-fit"></i>Cabe</span>
+      <span><i class="dot dot-tight"></i>Até 15% acima</span>
+      <span><i class="dot dot-over"></i>Fora do orçamento</span>
+      <span><i class="dot dot-origin"></i>Sua origem</span>
+      <span><i class="dot dot-star">★</i>Voo com preço real</span>
+      <span><i class="dot dot-star dot-star-vazia">☆</i>Tem voo direto</span>
+    </div>
+
+    <div class="map-loading" id="mapLoading" hidden><span class="spinner"></span> Calculando rotas…</div>
+  </main>
+
+  <!-- ============ BARRA INFERIOR DE DETALHES ============ -->
+  <footer class="details" id="details" data-state="collapsed">
+    <div class="details-resizer" id="detailsResizer"
+         title="Arraste para ajustar a altura · duplo clique para o padrão"></div>
+
+    <button type="button" class="details-handle" id="detailsHandle" aria-expanded="false">
+      <span class="details-handle-title" id="detailsTitle">Clique num destino do mapa para ver os voos</span>
+      <span class="details-handle-chevron" aria-hidden="true">▲</span>
+    </button>
+
+    <div class="details-body" id="detailsBody">
+      <p class="empty">Clique em um ponto do mapa ou em um destino da lista para ver as opções de voo e hospedagem.</p>
+      <aside class="ad-strip" aria-label="Publicidade">
+        <div class="ad-slot" data-ad="strip1"></div>
+        <div class="ad-slot" data-ad="strip2"></div>
+        <div class="ad-slot" data-ad="strip3"></div>
+      </aside>
+    </div>
+
+    <details class="aviso-legal">
+      <summary><b>Aviso.</b> Este site não vende passagens nem faz reservas —
+        <b>cada reserva é de responsabilidade de quem a faz</b>. Tudo aqui é
+        calculado automaticamente. <i>Ler o aviso completo</i></summary>
+      <p>Os links abrem o site da companhia ou um buscador, em nova aba, e a
+        compra acontece lá — incluindo conferir preço, datas, bagagem e as
+        condições no momento do pagamento. Os trajetos com escala são
+        <b>bilhetes separados</b>, sem proteção de conexão: um atraso pode fazer
+        perder o voo seguinte. Tudo é calculado sem revisão humana, a partir de
+        dados públicos que mudam a todo momento — serve para
+        <b>explorar possibilidades</b>, não como garantia de preço,
+        disponibilidade ou viabilidade da viagem.</p>
+      <p><a href="privacidade.html">Privacidade</a></p>
+    </details>
+  </footer>
+</div>
+
+<dialog id="helpDialog" class="dlg">
+  <h3>Como funciona</h3>
+  <p>Você diz quanto tem, de onde sai, por quantos dias e em que mês. Nós cruzamos <b>preço do voo</b> e <b>preço de hospedagem</b> de cada cidade para mostrar no mapa aonde esse dinheiro te leva. Você escolhe se a conta inclui os dois, só o voo ou só a hospedagem.</p>
+  <p>Onde existe rota da <b>Ryanair</b>, o voo é <b>preço real</b>, buscado na hora, com as datas e link para reservar — esses aparecem com o selo <b>real</b>. Nas outras rotas, e na hospedagem, o valor é estimado.</p>
+  <p class="note"><b>Comida e passeios ficam de fora de propósito:</b> esse gasto varia demais de pessoa para pessoa e uma estimativa ali só atrapalharia a escolha do destino.</p>
+  <p class="note"><b>Sobre as reservas.</b> Este site não vende passagens nem faz
+    reservas: os links abrem o site da companhia ou um buscador, em nova aba, e a
+    compra acontece lá — <b>cada reserva é de responsabilidade de quem a faz</b>.
+    Trajetos com escala são bilhetes separados, sem proteção de conexão.</p>
+
+  <p class="note">Sobre dados e anúncios, veja a
+    <a href="privacidade.html">página de privacidade</a>.</p>
+
+  <form method="dialog"><button class="btn-primary">Entendi</button></form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module" src="assets/js/app.js?v=39"></script>
 </body>
 </html>

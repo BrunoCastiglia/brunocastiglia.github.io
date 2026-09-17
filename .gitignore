@@ -1,0 +1,17 @@
+# dependências (o projeto não usa, mas evita sujeira se alguém instalar algo)
+node_modules/
+
+# macOS
+.DS_Store
+
+# editores
+.vscode/
+.idea/
+*.swp
+
+# ambiente local
+.env
+.env.local
+
+# configuração local do Claude Code
+.claude/

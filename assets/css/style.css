@@ -1,0 +1,1153 @@
+/* ========================================================================
+   Pra onde posso ir? — folha de estilo
+   Layout: topo / [lateral esquerda | mapa] / barra inferior de detalhes
+   ===================================================================== */
+
+:root{
+  /* ---- superfícies ----
+     Fundo levemente cinza em vez de branco puro: papel branco atrás de texto
+     escuro cansa a vista, e um cinza de 2% já tira o brilho sem parecer
+     "apagado". Os painéis, esses sim brancos, ganham profundidade por
+     contraste com o fundo — sem precisar de sombra pesada. */
+  --bg:#f4f6f8;
+  --bg-2:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#f7f9fb;
+  --line:#dfe4ea;
+  --line-soft:#eceff3;
+  --scroll:#c6ced8;
+
+  /* ---- texto ----
+     Três níveis, e só três: título, apoio e detalhe. Mais hierarquia que isso
+     vira ruído e a pessoa perde a referência do que é importante. */
+  --txt:#18222f;
+  --txt-dim:#5b6b7e;
+  /* #8593a4 dava 2,89:1 sobre o fundo da página — reprovado. As dicas sob os
+     campos são texto de verdade, não decoração: subiram para 4,6:1. */
+  --txt-faint:#63717f;
+
+  /* ---- cor da marca ----
+     O verde do tema escuro (#2dd4a7) tem contraste 2,1:1 sobre branco: serve
+     de fundo, não de texto. No claro ele fica escuro o bastante para ler, e o
+     tom vivo migra para os fundos de pílula (--accent-bg / --accent-chip). */
+  --accent:#0a7d5c;
+  --accent-2:#0b7f80;
+  --accent-ink:#ffffff;
+  --accent-bg:#0d9a720f;
+  --accent-bg-forte:#0d9a721f;
+  --accent-chip:#0d9a7226;
+  --accent-line:#0d9a7259;
+
+  /* ---- veredito do orçamento ----
+     Verde/âmbar/vermelho, cada um com a tinta que garante leitura quando ele
+     é fundo de pílula no mapa. */
+  /* Duas famílias, e a distinção importa:
+     --fit / --tight são a cor do DADO (pontos da legenda, números das
+     estatísticas, texto sobre branco) e precisam ser vivas;
+     --*-pino é o fundo da pílula no mapa, que carrega texto branco em 11,5 px
+     sobre tiles claros. O tom vivo ali dava 3,0:1 com branco — reprovado — e
+     quase não se destacava do mapa. Escurecido, vai a 6,3:1. */
+  --fit:#0fa97c;      --fit-pino:#0a6e4f;   --fit-ink:#ffffff;
+  --tight:#e0a020;    --tight-pino:#965d00; --gold-ink:#3a2c00;
+  --over:#d94452;     --over-pino:#b03040;
+  --over-bg:#fdeced;  --over-ink:#a5323d;  --over-line:#d9445259;
+
+  /* ---- origem ---- */
+  --origin:#2563eb;   --origin-ink:#ffffff;
+
+  /* ---- dourado do "preço confirmado" ----
+     Dois papéis distintos: --gold-solid é fundo de selo (precisa ser vivo) e
+     --gold é texto e borda (precisa ser escuro para ler sobre branco). Usar o
+     mesmo tom nos dois era o que sumia no tema claro. */
+  --gold:#845a00;
+  --gold-solid:#f5b32b;
+  /* A estrela fica sobre a pílula escura do mapa, não sobre branco: ali o
+     dourado escuro sumia (1,58:1). Este tom claro dá 4,3:1 no verde. */
+  --gold-pino:#ffd970;
+  --gold-bg:#f5b32b14;
+  --gold-bg-forte:#f5b32b2e;
+  --gold-line:#d99a0866;
+  --gold-chip:#f5b32b33;
+
+  /* ---- caixas sobre o mapa ---- */
+  --overlay:#ffffffee;
+  --overlay-solido:#fffffff7;
+  --mapa-fundo:#e8edf1;
+
+  --radius:12px;
+  /* 258 px cortava o seletor de data nativo do Chrome, que tem largura
+     própria (campo + ícone de calendário) e não encolhe abaixo dela. */
+  --sidebar-w:286px;
+  /* Origem dos avisos sobre o mapa: à direita da lateral flutuante e abaixo da
+     barra superior. */
+  --mapa-esq:12px;
+  --mapa-topo:12px;
+  --details-h:clamp(92px, 10vh, 132px);
+  --shadow:0 6px 20px rgba(23,43,77,.10), 0 1px 3px rgba(23,43,77,.08);
+  --font:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+
+*{box-sizing:border-box}
+/* o atributo hidden precisa vencer os display: das classes abaixo */
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  margin:0;font-family:var(--font);background:var(--bg);color:var(--txt);
+  font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+b,strong{font-weight:650}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------------------------------------------------------- topo ----- */
+/* ============ BARRA SUPERIOR FLUTUANTE =================================
+   O mapa é o fundo da página: a barra é um cartão que paira sobre ele, com
+   margem nos quatro lados, para o mapa continuar visível em volta. Duas
+   linhas, na ordem em que a pessoa decide: onde, depois quanto. */
+.topbar{
+  position:relative;z-index:1200;
+  display:flex;flex-direction:column;gap:6px;
+  padding:8px 14px;background:var(--panel);
+  border-bottom:1px solid var(--line);
+}
+.topbar-linha{display:flex;align-items:flex-start;gap:16px}
+.topbar-linha-1{align-items:flex-start}
+.topbar-lugares{display:flex;gap:14px;flex:1;min-width:0}
+.topbar-lugares .field-topo{flex:1;min-width:0;margin:0}
+.field-topo label{margin-bottom:4px}
+.field-topo .hint{margin:4px 0 0;font-size:10.5px;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .brand{padding-top:2px}
+.topbar .icon-btn{flex:none;margin-top:2px}
+
+/* ---- segunda linha: o orçamento é o controle principal da tela ----
+   Ele ocupa a largura toda porque é a pergunta que o site responde. A caixa
+   de valor fica à direita, no fim do trajeto do olho sobre a barra, e aceita
+   valores acima do máximo do slider. */
+.topbar-linha-2{align-items:center;gap:18px}
+.seg-moeda{flex:none}
+.orcamento{flex:1;display:flex;flex-direction:column;gap:3px;min-width:180px}
+.orcamento-rotulo{
+  font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--txt-dim);text-align:center;
+}
+/* ---- o slider é o controle principal da tela, e tem que parecer ----
+   Trilho de 10 px, parte preenchida na cor da marca e polegar de 26 px: em
+   4 px de altura ele lia como uma linha divisória, não como algo para pegar.
+   `--pct` é escrito pelo JS a cada movimento — sem isso não há como pintar só
+   o trecho à esquerda do polegar num input nativo. */
+.orcamento input[type=range]{
+  width:100%;margin:0;height:10px;border-radius:6px;
+  background:linear-gradient(to right,
+    var(--accent) 0 var(--pct,20%), var(--line) var(--pct,20%) 100%);
+}
+.orcamento input[type=range]::-webkit-slider-thumb{
+  width:26px;height:26px;border:3px solid #fff;
+  background:var(--accent);
+  box-shadow:0 2px 8px rgba(23,43,77,.3), 0 0 0 1px var(--accent);
+}
+.orcamento input[type=range]::-moz-range-thumb{
+  width:20px;height:20px;border:3px solid #fff;background:var(--accent);
+  box-shadow:0 2px 8px rgba(23,43,77,.3);
+}
+.orcamento input[type=range]:focus-visible{outline-offset:4px}
+/* Acima do teto da barra, o polegar fica no fim e perde a cor: o número no
+   campo é que manda, e pintar o trilho inteiro sugeriria o contrário. */
+.orcamento input[type=range].is-beyond{
+  background:linear-gradient(to right, var(--txt-faint) 0 100%);
+}
+.orcamento-valor{flex:none;display:flex;flex-direction:column;gap:2px;width:168px}
+.orcamento-valor .money{margin:0}
+.orcamento-valor .money input{padding-top:6px;padding-bottom:6px;font-size:18px}
+.orcamento-valor .hint{margin:0;font-size:10px;text-align:right;line-height:1.3}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{
+  width:30px;height:30px;display:grid;place-items:center;border-radius:9px;
+  background:linear-gradient(140deg,var(--accent),var(--accent-2));color:var(--accent-ink);
+  font-size:17px;font-weight:800;flex:none;
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.brand-text strong{font-size:15px;letter-spacing:-.01em}
+.brand-text small{color:var(--txt-faint);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+
+.icon-btn{
+  width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+  background:var(--panel);color:var(--txt-dim);cursor:pointer;font-weight:700;
+}
+.icon-btn:hover{color:var(--txt);border-color:var(--accent)}
+
+/* botões segmentados (moeda / estilo) */
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg-wide{width:100%}
+.seg-wide .seg-btn{flex:1}
+.seg-btn{
+  border:0;background:transparent;color:var(--txt-dim);cursor:pointer;
+  padding:5px 11px;border-radius:7px;font-size:12.5px;font-weight:600;white-space:nowrap;
+  transition:background .15s,color .15s;
+}
+.seg-btn:hover{color:var(--txt)}
+.seg-btn.is-active{background:var(--accent);color:var(--accent-ink)}
+
+/* ------------------------------------------------------- layout ----- */
+/* O mapa ocupa tudo; a barra superior e a lateral pairam sobre ele. Só a
+   barra de detalhes continua ancorada, porque cresce e empurraria o mapa. */
+/* Cada região tem o seu espaço: nada fica por cima do mapa. Sobrepor a barra
+   e a lateral escondia justamente os destinos mais próximos da origem, que são
+   os que mais interessam. */
+.layout{
+  /* flex:1 em vez de calc(100% - altura da barra): a altura da barra era
+     medida pelo JS e escrita numa variável, e bastava essa medida ficar velha
+     para o layout inteiro encolher — foi o que aconteceu, com --topbar-h em
+     233 px enquanto a barra media 104, e o mapa perdendo 129 px. Com flex o
+     navegador faz a conta sozinho, sempre certa. */
+  flex:1;min-height:0;
+  display:grid;
+  grid-template-columns:var(--sidebar-w) 1fr;
+  grid-template-rows:1fr auto;
+  grid-template-areas:"side map" "side details";
+}
+
+/* ------------------------------------------------------ lateral ----- */
+
+.sidebar{
+  grid-area:side;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+}
+.sidebar::-webkit-scrollbar,.results-list::-webkit-scrollbar,.details-body::-webkit-scrollbar{width:9px}
+.sidebar::-webkit-scrollbar-thumb,.results-list::-webkit-scrollbar-thumb,.details-body::-webkit-scrollbar-thumb{
+  background:var(--scroll);border-radius:9px;border:2px solid var(--bg-2)}
+
+.panel{padding:16px 16px 4px;display:flex;flex-direction:column;gap:14px}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label{font-size:12px;font-weight:600;color:var(--txt-dim);letter-spacing:.01em}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{margin:0;font-size:11px;color:var(--txt-faint)}
+
+input[type=text],input[type=number],select{
+  width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:9px 11px;font-size:14px;transition:border-color .15s,background .15s;
+}
+input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--accent);background:var(--panel-2);outline:none}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--txt-faint) 50%),linear-gradient(135deg,var(--txt-faint) 50%,transparent 50%);
+  background-position:calc(100% - 16px) 51%,calc(100% - 11px) 51%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px;cursor:pointer}
+
+.money{position:relative}
+.money-symbol{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt-faint);font-weight:600;pointer-events:none}
+.money input{padding-left:30px;font-size:17px;font-weight:650}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:4px;
+  background:var(--line);cursor:pointer;margin:6px 0 0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg-2);box-shadow:0 0 0 1px var(--accent);
+}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-2)}
+
+
+
+.btn-primary{
+  width:100%;border:0;border-radius:10px;padding:11px;cursor:pointer;
+  background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:14px;
+  transition:filter .15s,transform .05s;
+}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-primary[disabled]{opacity:.6;cursor:progress}
+
+/* autocomplete de origem */
+.combo{position:relative}
+.combo-list{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:1300;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+  box-shadow:var(--shadow);max-height:230px;overflow-y:auto;padding:4px;
+}
+.combo-item{padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.combo-item:hover,.combo-item.is-active{background:var(--accent-bg-forte)}
+.combo-item small{color:var(--txt-faint);font-size:11px;white-space:nowrap}
+
+/* --------------------------------------------------------- mapa ----- */
+.map-wrap{grid-area:map;position:relative;background:var(--mapa-fundo);min-height:0}
+#map{position:absolute;inset:0}
+.leaflet-container{background:var(--mapa-fundo);font-family:var(--font)}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--txt)!important;border-color:var(--line)!important}
+.leaflet-control-attribution{background:var(--overlay)!important;color:var(--txt-faint)!important;font-size:10px}
+.leaflet-control-attribution a{color:var(--txt-dim)!important}
+
+.map-overlay{
+  position:absolute;z-index:800;background:var(--overlay);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+}
+/* Os três avisos do mapa partem do mesmo canto: logo abaixo da barra
+   superior e à direita da lateral, que agora flutuam sobre o mapa. */
+.map-stats{top:var(--mapa-topo);left:var(--mapa-esq);display:flex;gap:2px;padding:8px 4px}
+.map-stats > div{display:flex;flex-direction:column;align-items:center;padding:0 12px;line-height:1.15}
+.map-stats > div + div{border-left:1px solid var(--line)}
+.map-stats b{font-size:17px;font-weight:700}
+.map-stats div:nth-child(1) b{color:var(--fit)}
+.map-stats div:nth-child(2) b{color:var(--tight)}
+.map-stats div:nth-child(3) b{color:var(--over)}
+.map-stats span{font-size:10px;color:var(--txt-faint);white-space:nowrap}
+
+/* A legenda passou para a direita: à esquerda ela dividia a coluna com a pilha
+   de botões e, em telas mais baixas, as duas se sobrepunham. Separadas, cada
+   canto tem uma função — comandos à esquerda, chave de leitura à direita. */
+.map-legend{
+  bottom:26px;right:12px;left:auto;
+  display:flex;flex-direction:column;gap:5px;padding:9px 11px;
+  font-size:11px;color:var(--txt-dim);
+}
+@media (max-width:820px){ .map-legend{display:none} }
+.map-legend span{display:flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.dot-fit{background:var(--fit)}.dot-tight{background:var(--tight)}.dot-over{background:var(--over)}.dot-origin{background:var(--origin)}
+
+.map-loading{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:900;
+  background:var(--overlay-solido);border:1px solid var(--line);border-radius:10px;
+  padding:12px 18px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);
+}
+.spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* marcadores */
+/* O Leaflet dá tamanho 0x0 ao ícone; sem largura própria o texto do preço
+   vazava para fora da pílula e aparecia cortado no mapa. */
+.leaflet-marker-icon.pin-wrap{background:none;border:0;width:0!important;height:0!important;overflow:visible}
+.pin{
+  position:absolute;left:0;top:0;width:max-content;
+  display:flex;align-items:center;gap:3px;
+  border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap;
+  padding:3px 9px;border:1.5px solid rgba(0,0,0,.35);box-shadow:0 3px 10px rgba(0,0,0,.5);
+  transform:translate(-50%,-50%);cursor:pointer;transition:transform .12s;
+}
+.pin:hover{transform:translate(-50%,-50%) scale(1.09);z-index:999!important}
+
+/* destino com preço real de voo */
+.pin-star{font-style:normal;font-size:11px;line-height:1;color:var(--gold-pino)}
+.pin.pin-real{
+  box-shadow:0 0 0 2px var(--gold-solid), 0 3px 12px rgba(0,0,0,.55);
+  border-color:rgba(0,0,0,.45);
+}
+.dot-star{
+  width:auto;height:auto;border-radius:0;background:none;
+  color:var(--gold);font-size:11px;line-height:1;
+}
+.tip-real{color:var(--gold);font-size:11px}
+.tip-est{color:var(--txt-faint);font-size:11px}
+.pin-fit{background:var(--fit-pino);color:#fff}
+.pin-tight{background:var(--tight-pino);color:#fff}
+/* "Acima do orçamento" continua discreto de propósito — é o que a pessoa
+   descarta —, mas agora lê: era texto apagado sobre rosa quase branco. */
+.pin-over{background:#fff;color:var(--over-pino);border-color:var(--over-line);font-weight:650}
+.pin-origin{background:var(--origin);color:var(--origin-ink)}
+.pin.is-selected{box-shadow:0 0 0 3px rgba(255,255,255,.85),0 3px 12px rgba(0,0,0,.6);z-index:1000!important}
+
+/* ---------------------------------------------------- detalhes ------ */
+.details{
+  grid-area:details;background:var(--bg-2);border-top:1px solid var(--line);
+  display:flex;flex-direction:column;z-index:1000;
+}
+/* Sem destino escolhido não há conteúdo do editor nessa barra — some junto
+   com o resto. Anúncio sem conteúdo ao lado é o que o AdSense chama de
+   "anúncio em tela sem conteúdo do editor" e recusa. */
+.details[data-state=collapsed] .details-body{display:none}
+.details[data-state=open] .details-body{display:block;height:var(--details-h)}
+.details[data-state=open] .details-handle-chevron{transform:rotate(180deg)}
+
+.details-handle{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  background:transparent;border:0;padding:11px 16px;cursor:pointer;text-align:left;
+}
+.details-handle:hover{background:var(--panel)}
+.details-handle-title{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:9px;min-width:0}
+.details-handle-title .tag{
+  font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em;flex:none}
+.tag-fit{background:rgba(45,212,167,.16);color:var(--fit)}
+.tag-tight{background:rgba(242,181,59,.16);color:var(--tight)}
+.tag-over{background:rgba(239,95,107,.16);color:var(--over)}
+.details-handle-chevron{color:var(--txt-faint);font-size:11px;transition:transform .2s;flex:none}
+
+.details-body{overflow-y:auto;padding:0 16px 18px}
+
+.dgrid{display:grid;grid-template-columns:2.2fr minmax(230px,1fr) minmax(180px,.66fr);gap:18px;align-items:start}
+.dcol h4{
+  margin:0 0 9px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--txt-faint);border-bottom:1px solid var(--line-soft);padding-bottom:6px;
+}
+
+/* Faixa de resumo: uma linha só, acima das colunas.
+   Era uma coluna inteira com o total em corpo 27 — que repetia o número já
+   presente no cabeçalho e disputava a atenção com o preço de cada opção, que
+   é o que a pessoa está de fato comparando. Aqui sobra o que o cabeçalho não
+   diz: quanto sobra do orçamento e como o gasto se divide. */
+.resumo-linha{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:0 0 11px;margin-bottom:13px;border-bottom:1px solid var(--line-soft);
+}
+.resumo-saldo{font-size:13px;color:var(--txt-dim)}
+.resumo-saldo b{font-weight:700;font-size:15px}
+.resumo-saldo.ok b{color:var(--accent)}
+.resumo-saldo.bad b{color:var(--over)}
+.resumo-bar{display:flex;align-items:center;gap:10px;flex:1;min-width:220px;max-width:420px}
+.resumo-bar .bar{margin:0;flex:1;max-width:170px}
+.resumo-linha .local-cur{margin:0;border:0;padding:0;flex-basis:100%}
+
+.bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--panel);margin-bottom:8px}
+.bar i{display:block;height:100%}
+.bar .b-flight{background:var(--origin)}
+.bar .b-stay{background:var(--accent)}
+.bar-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--txt-dim)}
+.bar-key span{display:flex;align-items:center;gap:5px}
+.bar-key i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+.local-cur{margin:12px 0 0;font-size:11.5px;color:var(--txt-faint);border-top:1px dashed var(--line);padding-top:10px}
+.local-cur b{color:var(--txt-dim)}
+
+/* linhas de opções (voo / hospedagem) */
+.opt{
+  display:grid;grid-template-columns:1fr auto;gap:1px 10px;padding:8px 10px;border-radius:9px;
+  background:var(--panel);border:1px solid var(--line-soft);margin-bottom:6px;
+}
+.opt.is-pick{border-color:var(--accent);background:var(--accent-bg)}
+.opt-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.opt-name .pick{font-size:9px;font-weight:800;color:var(--accent-ink);background:var(--accent);padding:1px 5px;border-radius:4px;letter-spacing:.03em}
+.opt-meta{grid-column:1;font-size:11px;color:var(--txt-faint)}
+.opt-price{
+  grid-row:1/3;grid-column:2;align-self:start;text-align:right;
+  font-size:19px;font-weight:750;letter-spacing:-.02em;line-height:1.15;
+}
+.opt-price small{display:block;font-size:10px;font-weight:500;color:var(--txt-faint)}
+
+.book{display:flex;flex-direction:column;gap:7px}
+.book a{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+  color:var(--txt);text-decoration:none;font-size:12.5px;font-weight:600;transition:.15s;
+}
+.book a:hover{border-color:var(--accent);color:var(--accent)}
+.book a span{color:var(--txt-faint);font-size:11px;font-weight:500}
+.disclaimer{font-size:10.5px;color:var(--txt-faint);line-height:1.5;margin:10px 0 0}
+
+/* ----------------------------------------------------- anúncios ----- */
+.ad-slot{
+  margin:14px 16px;min-height:250px;border:1px dashed var(--line);border-radius:10px;
+  display:grid;place-items:center;color:var(--txt-faint);font-size:11px;background:var(--panel);
+}
+.ad-slot::after{content:"espaço publicitário"}
+.ad-slot:has(ins){border:0;background:none;min-height:0;padding:0}
+.ad-slot:has(ins)::after{content:none}
+.ad-inline{margin:10px 0 0;min-height:90px}
+
+/* -------------------------------------------------------- modal ----- */
+.dlg{
+  border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:14px;
+  padding:22px;max-width:430px;box-shadow:var(--shadow);
+}
+.dlg::backdrop{background:rgba(0,0,0,.6)}
+.dlg h3{margin:0 0 10px;font-size:17px}
+.dlg p{margin:0 0 12px;font-size:13px;color:var(--txt-dim);line-height:1.6}
+.dlg .note{font-size:11.5px;color:var(--txt-faint);background:var(--bg-2);padding:9px 11px;border-radius:8px}
+
+/* ---------------------------------------------------- responsivo ---- */
+@media (max-width:1060px){
+  .dgrid{grid-template-columns:1fr 1fr;gap:14px}
+}
+@media (max-width:880px){
+  body{overflow:auto}
+  /* Em tela estreita não cabe nada flutuando: a barra e a lateral voltam a ser
+     blocos empilhados e o mapa fica entre eles. */
+  .topbar{position:static;border-radius:0;border-width:0 0 1px;box-shadow:none;
+    margin:0;padding:10px 14px}
+  .topbar-linha-1{flex-wrap:wrap}
+  .topbar-lugares{flex-basis:100%;flex-wrap:wrap}
+  .topbar-lugares .field-topo{flex-basis:100%}
+  .topbar-linha-2{flex-wrap:wrap}
+  .orcamento-valor{width:100%}
+  .orcamento-valor .hint{text-align:left}
+  .layout{
+    grid-template-columns:1fr;grid-template-rows:auto 58vh auto;
+    grid-template-areas:"side" "map" "details";height:auto;
+  }
+  .sidebar{
+    position:static;width:auto;max-height:none;border-radius:0;
+    border-width:0 0 1px;box-shadow:none;overflow:visible;
+  }
+  .map-wrap{min-height:58vh}
+  /* sem lateral flutuante, os avisos voltam para o canto do mapa */
+  :root{--mapa-esq:12px;--mapa-topo:12px}
+  .details[data-state=open] .details-body{height:auto;max-height:none}
+  .dgrid{grid-template-columns:1fr}
+  .brand-text small{display:none}
+  .map-stats{padding:6px 2px}
+  .map-stats > div{padding:0 9px}
+
+  /* no celular a barra inferior cresce com o conteúdo: não há o que ajustar */
+  .details-resizer{display:none}
+
+  /* no celular o anúncio da lateral vai para depois dos resultados
+     e ocupa bem menos altura, para não empurrar a lista para baixo */
+  .sidebar{display:flex;flex-direction:column}
+  .panel{order:1}
+  .results{order:2;border-top:0}
+  .ad-slot[data-ad=sidebar]{order:3;min-height:110px}
+  .brand-text strong{white-space:nowrap}
+  .topbar{gap:8px}
+  .seg-btn{padding:5px 8px;font-size:12px}
+}
+
+/* marcador discreto para destinos fora do orçamento */
+/* #4a3038 era um vinho escuro herdado do tema escuro: sobre mapa claro virava
+   uma sujeira difícil de ler como "destino". Ponto branco com aro vermelho lê
+   como marcador desligado — visível, mas sem competir com os preços. */
+.pin.pin-dot{
+  width:10px;height:10px;padding:0;border-radius:50%;background:#fff;
+  border:2px solid var(--over-pino);box-shadow:0 1px 3px rgba(23,43,77,.3);
+}
+.pin.pin-dot:hover{background:var(--over)}
+
+/* tooltip do mapa */
+.leaflet-tooltip.dest-tip{
+  background:var(--panel-2);border:1px solid var(--line);color:var(--txt);
+  border-radius:8px;box-shadow:var(--shadow);font-size:12px;padding:6px 9px;
+}
+.leaflet-tooltip.dest-tip::before{border-top-color:var(--line)}
+
+/* Os tiles do OSM já são claros: em vez de invertê-los, só tiramos parte da
+   saturação e clareamos um pouco. O mapa vira um plano de fundo calmo e as
+   pílulas coloridas de preço — que são o dado — ficam sendo a única coisa
+   saturada na tela, que é onde o olho deve cair primeiro.
+   O filtro pega só o painel de tiles; marcadores e rótulos são painéis irmãos
+   e não são afetados. */
+.leaflet-tile-pane{
+  filter:saturate(.62) brightness(1.05) contrast(.94);
+}
+.leaflet-control-zoom{border:1px solid var(--line)!important;border-radius:9px!important;overflow:hidden}
+.leaflet-control-zoom a{border-radius:0!important;line-height:26px!important;width:28px!important;height:28px!important}
+
+/* ============================ preços reais de voo (Ryanair) ============== */
+
+/* selo "real" no card da lista */
+.real-badge{
+  display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;
+  background:rgba(99,168,255,.18);color:var(--origin);
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;vertical-align:1px;
+}
+
+/* caixa de status no mapa */
+.map-fare{
+  top:var(--mapa-topo);left:var(--mapa-esq);margin-top:58px;
+  display:flex;align-items:center;gap:8px;
+  padding:7px 11px;font-size:11.5px;color:var(--txt-dim);max-width:260px;
+}
+.map-fare b{color:var(--origin);font-size:15px;font-weight:750}
+.map-fare[data-kind=loading]{color:var(--txt-faint)}
+.map-fare[data-kind=uncovered],.map-fare[data-kind=none]{color:var(--txt-faint);font-style:italic}
+
+/* linha da tarifa real, em destaque no painel de detalhes */
+.opt.is-real{
+  border-color:var(--gold);background:rgba(255,210,74,.09);
+  grid-template-columns:1fr auto;
+  box-shadow:0 0 0 1px rgba(255,210,74,.25);
+}
+.opt.is-real .opt-name{color:var(--gold)}
+.pick-real{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
+.opt-book{
+  grid-column:1/3;margin-top:6px;font-size:11.5px;font-weight:700;
+  color:var(--origin);text-decoration:none;
+}
+.opt-book:hover{text-decoration:underline}
+
+
+/* ===================== seletor "o que entra na conta" =================== */
+.seg-stack{flex-wrap:wrap}
+.seg-stack .seg-btn{flex:1 1 auto;min-width:0}
+.seg-stack .seg-btn:first-child{flex-basis:100%}
+
+/* o painel de detalhes se adapta a quantas colunas o modo produz */
+/* Só voo ou só hospedagem: duas colunas — a do conteúdo e a da busca. */
+.dgrid-flight,.dgrid-stay{grid-template-columns:1fr minmax(190px,.42fr)}
+
+/* inventário real de hospedagens (OpenStreetMap) */
+.osm-stays{
+  margin:10px 0 0;padding-top:9px;border-top:1px dashed var(--line);
+  font-size:11px;color:var(--txt-faint);line-height:1.5;
+}
+.osm-stays b{color:var(--txt-dim);font-weight:600}
+.osm-stays span{display:block;font-size:10px;opacity:.75;margin-top:2px}
+
+/* ==================== opções clicáveis (voo e hospedagem) =============== */
+.opt{grid-template-rows:auto auto auto}
+a.opt.is-link{text-decoration:none;color:inherit;display:grid;transition:.15s}
+a.opt.is-link:hover{border-color:var(--accent);background:var(--panel-2);transform:translateY(-1px)}
+a.opt.is-real.is-link:hover{border-color:var(--gold);background:rgba(255,210,74,.15)}
+.opt-go{
+  grid-column:1/-1;margin-top:6px;font-size:10.5px;font-weight:700;
+  color:var(--accent);opacity:.55;transition:opacity .15s;
+}
+a.opt.is-link:hover .opt-go{opacity:1}
+.opt-go-real{color:var(--gold)}
+
+/* ==================== faixa de anúncios do rodapé ====================== */
+.ad-strip{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+  margin:18px 0 4px;padding-top:16px;border-top:1px solid var(--line-soft);
+}
+.ad-strip .ad-slot{margin:0;min-height:110px}
+@media (max-width:1100px){ .ad-strip{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:700px){ .ad-strip{grid-template-columns:1fr} .ad-strip .ad-slot{min-height:100px} }
+
+/* ===================== detecção de localização ========================= */
+.combo input{padding-right:38px}
+.locate-btn{
+  position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  width:26px;height:26px;border-radius:7px;border:0;background:transparent;
+  color:var(--txt-faint);cursor:pointer;font-size:13px;line-height:1;
+  display:grid;place-items:center;transition:.15s;
+}
+.locate-btn:hover{color:var(--accent);background:var(--panel-2)}
+.locate-btn.is-busy{color:var(--accent);animation:pulsa 1s ease-in-out infinite}
+@keyframes pulsa{0%,100%{opacity:1}50%{opacity:.35}}
+.auto-tag{color:var(--accent);font-weight:600}
+
+
+/* ============ altura ajustável da barra inferior ======================= */
+.details-resizer{
+  height:9px;cursor:ns-resize;position:relative;flex:none;
+  touch-action:none;background:transparent;
+}
+.details-resizer::after{
+  content:'';position:absolute;left:50%;top:3px;transform:translateX(-50%);
+  width:44px;height:3px;border-radius:3px;background:var(--line);transition:background .15s;
+}
+.details-resizer:hover::after{background:var(--accent)}
+body.is-resizing{cursor:ns-resize;user-select:none}
+body.is-resizing .details-body{pointer-events:none}
+
+/* ================= arco da rota ao passar o mouse ====================== */
+.rota-layer{
+  position:absolute;inset:0;z-index:450;pointer-events:none;
+  opacity:0;transition:opacity .18s;overflow:visible;
+}
+.rota-layer.is-on{opacity:1}
+.rota-linha{
+  fill:none;stroke:url(#rotaGrad);stroke-width:1.6;stroke-linecap:round;
+  filter:drop-shadow(0 0 4px rgba(99,168,255,.5));
+}
+.rota-sombra{
+  fill:none;stroke:rgba(0,0,0,.45);stroke-width:3.4;stroke-linecap:round;
+}
+/* a barra de orçamento no máximo, com valor digitado acima dela */
+input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);box-shadow:0 0 0 1px var(--txt-faint)}
+
+/* ===================== trajeto com escala ============================== */
+.conexao{
+  margin-top:10px;padding:10px 11px;border-radius:10px;
+  background:rgba(99,168,255,.07);border:1px dashed rgba(99,168,255,.4);
+}
+.conexao-load{font-size:11.5px;color:var(--txt-faint);font-style:italic}
+.conexao-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.conexao-tag{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  background:var(--origin);color:var(--origin-ink);padding:2px 6px;border-radius:4px;
+}
+.conexao-head b{font-size:16px;font-weight:750;color:var(--origin)}
+.conexao-head small{font-size:10.5px;color:var(--txt-faint)}
+.conexao-rota{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.perna{display:flex;align-items:center;gap:8px;font-size:12px}
+.perna-rota{flex:1}
+.perna-rota b{color:var(--txt);font-weight:700;letter-spacing:.02em}
+.perna-data{color:var(--txt-faint);font-size:10.5px}
+.perna-preco{font-weight:700;font-size:12.5px}
+.perna-seta{color:var(--origin);font-size:10px;padding-left:14px;line-height:1.6}
+.perna-seta i{font-style:normal;color:var(--txt-faint);margin-left:4px}
+.perna-seta.is-longa i{color:var(--tight)}
+.conexao-nota{margin:0;font-size:10.5px;color:var(--txt-faint);line-height:1.55}
+.conexao-nota b{color:var(--txt-dim)}
+
+/* o arco ganha traço pontilhado quando representa uma conexão */
+.rota-layer.is-conexao .rota-linha{stroke-dasharray:none;stroke-width:1.8}
+
+/* ============ detalhes do voo dentro do cartão da lista ================= */
+.card-det{
+  grid-column:1/-1;margin-top:8px;padding-top:8px;
+  border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:3px;
+}
+.card-det-tit{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--gold);display:flex;align-items:center;gap:5px;margin-bottom:2px;
+}
+.card-det-est .card-det-tit{color:var(--txt-faint)}
+.ct-star{font-style:normal;font-size:9px}
+.card-trecho{display:flex;align-items:baseline;gap:6px;font-size:10.5px;color:var(--txt-dim);flex-wrap:wrap}
+.ct-rot{
+  font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-faint);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px;
+}
+.ct-voo{font-weight:700;color:var(--txt);font-size:10px;letter-spacing:.02em}
+.ct-hora{flex:1}
+.ct-dur{color:var(--txt-faint)}
+
+/* ============ trechos dentro da linha do voo (painel) ================== */
+.trechos{grid-column:1/-1;margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.trecho{
+  display:flex;align-items:baseline;gap:8px;font-size:11px;color:var(--txt-dim);
+  background:rgba(0,0,0,.18);border-radius:6px;padding:4px 8px;flex-wrap:wrap;
+}
+.trecho-rotulo{
+  font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-faint);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px;
+}
+.trecho-voo{font-weight:700;color:var(--gold);font-size:10.5px}
+.trecho-horas{flex:1}
+.trecho-horas b{color:var(--txt);font-weight:650}
+.trecho-horas i{font-style:normal;color:var(--txt-faint);margin:0 3px}
+.trecho-dur{color:var(--txt-faint);font-size:10px}
+.perna-voo{font-style:normal;color:var(--origin);font-weight:700;font-size:10px;margin-left:6px}
+.perna-seta i{font-style:normal;color:var(--txt-faint);margin-left:4px}
+.perna-seta.is-longa i{color:var(--tight)}
+
+/* ================= botão dourado: só preço confirmado ================== */
+.map-gold{
+  position:absolute;z-index:800;top:var(--mapa-topo);left:var(--mapa-esq);margin-top:104px;
+  display:flex;align-items:center;gap:7px;
+  padding:8px 13px;border-radius:20px;cursor:pointer;
+  background:var(--overlay);backdrop-filter:blur(8px);
+  border:1.5px solid rgba(255,210,74,.55);color:var(--gold);
+  font-size:12px;font-weight:650;box-shadow:var(--shadow);
+  transition:.15s;
+}
+.map-gold:hover{border-color:var(--gold);background:var(--gold-bg-forte)}
+.map-gold i{font-style:normal;font-size:12px;line-height:1}
+.map-gold b{
+  font-size:10.5px;font-weight:750;background:var(--gold-bg-forte);
+  padding:1px 6px;border-radius:9px;
+}
+.map-gold.is-on{
+  background:var(--gold);color:var(--gold-ink);border-color:var(--gold);
+  box-shadow:0 4px 18px rgba(255,210,74,.35);
+}
+.map-gold.is-on b{background:rgba(0,0,0,.16)}
+
+/* a lateral agora é só o formulário */
+.sidebar .ad-slot{margin-top:auto}
+@media (max-width:880px){ .map-gold{margin-top:96px} }
+
+/* ============ aba de pesquisa (antiga coluna "Reservar") =============== */
+.book-abas{gap:8px}
+.book-abas .aba{
+  flex-direction:column;align-items:flex-start;gap:2px;padding:11px 13px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+}
+.book-abas .aba b{font-size:13px;font-weight:650;color:var(--txt)}
+.book-abas .aba span{font-size:10.5px;color:var(--txt-faint)}
+.book-abas .aba:hover{border-color:var(--accent)}
+.book-abas .aba:hover b{color:var(--accent)}
+
+.sem-confirmado{
+  margin:8px 0 0;font-size:11px;color:var(--txt-faint);line-height:1.55;
+  padding:9px 11px;border-radius:9px;background:var(--panel);border:1px solid var(--line-soft);
+}
+.sem-confirmado b{color:var(--txt-dim)}
+
+/* dois botões de filtro no mapa */
+.map-filtros{
+  position:absolute;z-index:800;top:var(--mapa-topo);left:var(--mapa-esq);margin-top:104px;
+  display:flex;flex-direction:column;gap:7px;align-items:flex-start;
+}
+.map-filtros .map-gold{position:static;margin:0}
+.map-gold-alt{border-color:rgba(45,212,167,.5);color:var(--accent)}
+.map-gold-alt:hover{border-color:var(--accent);background:rgba(45,212,167,.14)}
+.map-gold-alt b{background:var(--accent-chip)}
+.map-gold-alt.is-on{
+  background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
+  box-shadow:0 4px 18px rgba(45,212,167,.3);
+}
+.map-gold-alt.is-on b{background:rgba(0,0,0,.16)}
+
+/* o aeroporto de partida aparece em destaque na linha do voo */
+.opt-meta b{color:var(--txt-dim);font-weight:700;letter-spacing:.02em}
+
+/* ============ pernas clicáveis e blocos de ida/volta =================== */
+.conexao-bloco{margin-bottom:10px}
+.conexao-rot{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--txt-faint);margin-bottom:4px;
+}
+a.perna.is-link{
+  display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;
+  padding:6px 8px;border-radius:8px;border:1px solid transparent;transition:.15s;
+}
+a.perna.is-link:hover{background:rgba(99,168,255,.12);border-color:var(--origin)}
+a.perna.is-link .perna-preco small{
+  display:block;font-size:9px;font-weight:600;color:var(--origin);
+  opacity:0;transition:opacity .15s;
+}
+a.perna.is-link:hover .perna-preco small{opacity:1}
+.perna-preco{text-align:right}
+
+/* ============ aviso de responsabilidade ================================ */
+.aviso-legal{
+  margin:16px 0 4px;padding:11px 13px;border-radius:9px;
+  background:var(--panel);border:1px solid var(--line-soft);
+  font-size:10.5px;line-height:1.6;color:var(--txt-faint);
+}
+.aviso-legal b{color:var(--txt-dim);font-weight:650}
+.fuso{font-style:normal;opacity:.75}
+
+/* ===== sem preço confirmado: a busca vira o caminho em destaque ========= */
+.dcol-ouro h4{color:var(--gold)}
+.book-abas.is-ouro .aba{
+  border-color:rgba(255,210,74,.55);background:rgba(255,210,74,.08);
+  box-shadow:0 0 0 1px var(--gold-bg-forte);
+}
+.book-abas.is-ouro .aba b{color:var(--gold)}
+.book-abas.is-ouro .aba:hover{
+  border-color:var(--gold);background:rgba(255,210,74,.16);
+}
+.book-abas.is-ouro .aba:hover b{color:var(--gold)}
+
+/* ============ alternativa: voo direto num destino vizinho =============== */
+.alt-direto{
+  display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;
+  text-align:left;cursor:pointer;margin-bottom:8px;
+  padding:9px 11px;border-radius:10px;
+  background:var(--gold-bg);border:1px solid var(--gold-line);
+  color:var(--txt);transition:.15s;
+}
+.alt-direto:hover{background:var(--gold-bg-forte);border-color:var(--gold)}
+.alt-tag{
+  grid-column:1/-1;font-size:9px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:2px;
+}
+.alt-nome{font-size:12.5px}
+.alt-nome b{font-weight:700}
+.alt-meta{grid-column:1;font-size:10.5px;color:var(--txt-faint)}
+.alt-preco{grid-row:2/4;grid-column:2;align-self:center;text-align:right;font-size:14px;font-weight:700;color:var(--gold)}
+.alt-preco small{display:block;font-size:9.5px;font-weight:500;color:var(--txt-faint)}
+.alt-ir{grid-column:1/-1;margin-top:5px;font-size:10.5px;font-weight:700;color:var(--gold);opacity:.6;transition:opacity .15s}
+.alt-direto:hover .alt-ir{opacity:1}
+
+/* voo direto saindo de um aeroporto vizinho — melhor que escala */
+.conexao.conexao-direta{
+  background:var(--gold-bg);border-color:var(--gold-line);border-style:solid;
+}
+.tag-direto{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
+.conexao-direta .conexao-head b{color:var(--gold)}
+.conexao-direta a.perna.is-link:hover{background:var(--gold-bg-forte);border-color:var(--gold)}
+.conexao-direta a.perna.is-link .perna-preco small{color:var(--gold)}
+
+/* campo "para onde quer ir" */
+.opcional{
+  font-style:normal;font-size:9.5px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--txt-faint);border:1px solid var(--line);
+  border-radius:4px;padding:0 5px;margin-left:5px;
+}
+.combo-item small b{color:var(--accent);font-weight:600}
+.perna-terra{border-top:1px dashed var(--line);margin-top:4px;padding-top:8px!important}
+.perna-terra .perna-voo{color:var(--accent)!important}
+
+/* ============ opções de caminho lado a lado ============================ */
+.caminho{padding-bottom:10px}
+.caminho + .caminho{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.caminho:hover{background:rgba(255,255,255,.02);border-radius:8px}
+.tag-escala{background:var(--origin)!important;color:var(--origin-ink)!important}
+.caminho[data-caminho=escala] .conexao-head b{color:var(--origin)}
+/* 9 px em maiúsculas é texto pequeno: o verde da marca sobre a pastilha verde
+   dava 4,05:1, abaixo do mínimo. Um tom mais escuro só para este selo resolve
+   sem mexer na cor da marca em todo o resto. */
+.selo-barato{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  background:var(--accent-chip);color:#065c43;padding:2px 7px;border-radius:10px;
+}
+.ver-destino{
+  display:inline-block;margin-top:4px;border:0;background:none;cursor:pointer;
+  color:var(--gold);font-size:11px;font-weight:700;padding:0;
+}
+.ver-destino:hover{text-decoration:underline}
+
+/* Com a barra recolhida, a tela é só o mapa e o formulário: o aviso longo
+   some junto e volta ao abrir um destino. Ele continua acessível no "?". */
+/* O aviso continua à vista no descanso: é uma linha só, carrega o disclaimer
+   e o link de privacidade, e o AdSense exige que esse link seja alcançável de
+   qualquer lugar do site. Escondê-lo economizava 31 px e custava a exigência. */
+.details[data-state=collapsed] .aviso-legal{display:block}
+.details[data-state=collapsed] .details-handle{padding:9px 16px}
+
+/* ====== duas opções lado a lado: rápida (ouro) e barata (verde) ========= */
+.conexao.duas-opcoes{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  background:none;border:0;padding:0;
+}
+.conexao.duas-opcoes .caminho{
+  margin:0;padding:11px 13px;border-radius:10px;border:1px solid var(--line);
+}
+.conexao.duas-opcoes .caminho + .caminho{margin-top:0;border-top:1px solid var(--line);padding-top:11px}
+.caminho-ouro{background:var(--gold-bg);border-color:var(--gold-line)!important}
+.caminho-verde{background:var(--accent-bg);border-color:var(--accent-line)!important}
+.caminho-ouro .conexao-head b{color:var(--gold)}
+.caminho-verde .conexao-head b{color:var(--accent)}
+.tag-ouro{background:var(--gold-solid)!important;color:var(--gold-ink)!important}
+.tag-verde{background:var(--accent)!important;color:var(--accent-ink)!important}
+
+.selo-rapido,.selo-duplo{
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  padding:2px 7px;border-radius:10px;
+  background:var(--gold-bg-forte);color:var(--gold);
+}
+.selo-duplo{background:linear-gradient(90deg,var(--gold-bg-forte),var(--accent-chip));color:var(--txt)}
+
+/* a grade se reorganiza quando a coluna de busca sai */
+/* Sem coluna de busca (preço confirmado), o conteúdo ocupa a largura toda:
+   é o que dá espaço para os dois caminhos ficarem lado a lado sem apertar. */
+.dgrid-sem-busca{grid-template-columns:1fr}
+.dgrid-sem-busca.dgrid-both{grid-template-columns:2.2fr minmax(230px,1fr)}
+/* O limiar era 1180 px de janela, de quando a lateral tinha 352 px. Com ela em
+   258 px sobra largura para os dois cards lado a lado bem antes disso — e
+   empilhados eles dobram a altura da barra, que é o que come o mapa. */
+@media (max-width:980px){ .conexao.duas-opcoes{grid-template-columns:1fr} }
+
+/* botão que dispara a busca de caminhos (em vez de buscar sozinho) */
+.procurar-caminhos{
+  display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;cursor:pointer;
+  padding:12px 14px;border-radius:10px;color:var(--txt);
+  background:var(--panel);border:1px dashed var(--line);transition:.15s;
+}
+.procurar-caminhos:hover{border-color:var(--accent);background:var(--panel-2)}
+.procurar-caminhos b{font-size:13px;font-weight:650}
+.procurar-caminhos span{font-size:11px;color:var(--txt-faint)}
+.procurar-caminhos:hover span{color:var(--accent)}
+.map-fare[data-kind=pausa]{color:var(--tight);font-style:italic}
+
+/* tem voo direto, preço ainda não consultado */
+.pin-star-vazia{color:rgba(255,210,74,.85)}
+.pin.pin-direto{box-shadow:0 0 0 1.5px rgba(255,210,74,.55), 0 3px 10px rgba(0,0,0,.5)}
+.dot-star-vazia{color:rgba(255,210,74,.85)}
+.tip-direto{color:var(--gold);font-size:11px;opacity:.9}
+
+/* ============ RADAR DE VARREDURA ============
+   Anéis que se abrem a partir da origem enquanto os preços reais chegam.
+   O marcador existe sempre (para acompanhar o mapa sozinho) e só fica
+   visível quando .map-wrap ganha .buscando. */
+.radar-icon{pointer-events:none}
+.radar{position:absolute;left:0;top:0;width:0;height:0;opacity:0;
+  transition:opacity .4s ease}
+.map-wrap.buscando .radar{opacity:1}
+.radar i{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+  border:1.5px solid var(--origin);border-radius:50%;opacity:0;
+  animation:radar-onda 3s cubic-bezier(.2,.6,.35,1) infinite}
+.radar i:nth-child(2){animation-delay:1s}
+.radar i:nth-child(3){animation-delay:2s}
+.map-wrap:not(.buscando) .radar i{animation-play-state:paused}
+
+@keyframes radar-onda{
+  0%  {transform:scale(.35);opacity:.85}
+  70% {opacity:.18}
+  100%{transform:scale(9);opacity:0}
+}
+
+/* enquanto varre, o contador ganha um pulso discreto */
+.map-fare[data-kind="varrendo"] b,
+.map-fare[data-kind="loading"] span{animation:fare-pulso 1.4s ease-in-out infinite}
+@keyframes fare-pulso{50%{opacity:.5}}
+
+@media (prefers-reduced-motion:reduce){
+  .radar i{animation:none;opacity:.3;transform:scale(3)}
+  .map-fare[data-kind="varrendo"] b,
+  .map-fare[data-kind="loading"] span{animation:none}
+}
+
+/* ============ CABEÇALHO DOS CARDS DE CAMINHO ============================
+   O preço migrou para a direita do cabeçalho, na linha do título. Antes ele
+   vinha depois do selo, no meio de uma linha que embrulhava — e o número, que
+   é o critério da comparação, aparecia em posições diferentes em cada card.
+   Ancorado no mesmo canto dos dois, a pessoa compara com um movimento de olho
+   só, sem reler nada. */
+.conexao-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:nowrap;
+}
+.conexao-id{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.conexao-id small{flex-basis:100%;font-size:10.5px;color:var(--txt-faint);line-height:1.35}
+.conexao-preco{
+  font-size:21px;font-weight:750;letter-spacing:-.02em;line-height:1.1;
+  flex:none;white-space:nowrap;
+}
+.caminho-ouro .conexao-preco{color:var(--gold)}
+.caminho-verde .conexao-preco{color:var(--accent)}
+
+/* ============ AJUSTES DO TEMA CLARO ==================================== */
+/* O realce de hover era um branco translúcido — invisível sobre fundo claro. */
+.caminho:hover{background:#18222f08;border-radius:8px}
+/* O anel de seleção do pin era branco: sobre mapa claro não se via. */
+.pin.is-selected{
+  box-shadow:0 0 0 3px var(--txt), 0 3px 12px rgba(23,43,77,.28);
+  z-index:1000!important;
+}
+/* As pílulas do mapa ficam sobre fotos de terreno de todos os tons: a borda
+   clara garante que o recorte apareça tanto sobre mar quanto sobre cidade. */
+/* Contorno branco: separa a pílula escura do mapa claro por baixo, seja mar,
+   cidade ou montanha, sem depender da cor do tile. */
+.pin{border-color:#ffffffe6;box-shadow:0 2px 9px rgba(23,43,77,.3)}
+.pin-over{border-color:var(--over-line)}
+.pin.pin-real{box-shadow:0 0 0 2px var(--gold-solid), 0 2px 9px rgba(23,43,77,.3)}
+.leaflet-control-attribution{background:#ffffffc4!important}
+
+/* ============ BOTÃO DE LIMPAR SELEÇÃO ==================================
+   Mora junto dos filtros do mapa, mas em cinza: é uma saída, não uma opção
+   de busca — competir em cor com os filtros dourado e verde faria a pessoa
+   lê-lo como "mais um filtro". Só aparece quando há algo a desfazer. */
+.map-limpar{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 13px;border-radius:20px;cursor:pointer;
+  background:var(--overlay);backdrop-filter:blur(8px);
+  border:1.5px solid var(--line);color:var(--txt-dim);
+  font-size:12px;font-weight:650;box-shadow:var(--shadow);transition:.15s;
+}
+.map-limpar:hover{border-color:var(--over);color:var(--over);background:var(--panel)}
+.map-limpar i{font-style:normal;font-size:11px;line-height:1}
+
+/* ============ DENSIDADE ================================================
+   A tela tinha informação boa em caixas grandes demais: a barra de cima
+   sozinha comia 190 px, a lateral 312 px, e o mapa — que é o produto — ficava
+   espremido entre as duas. Aqui os controles encolhem para o tamanho do que
+   realmente carregam, e o espaço vai para o mapa e para o respiro entre os
+   blocos, não para dentro deles. */
+
+/* ---- barra superior: de 190 px para ~104 px ---- */
+.topbar .brand-mark{width:26px;height:26px;font-size:15px;border-radius:8px}
+.topbar .brand-text strong{font-size:13.5px}
+.topbar .brand-text small{display:none}     /* o nome já diz; a frase repetia */
+.topbar-linha-1{align-items:center;gap:12px}
+.topbar-lugares{gap:10px}
+/* `.field` é uma coluna por padrão; aqui o rótulo fica ao LADO do campo, e
+   `flex-direction` precisa ser dito — trocar só o `display` não desfaz a
+   coluna herdada. */
+.topbar-lugares .field-topo{
+  position:relative;display:flex;flex-direction:row;align-items:center;gap:8px;
+}
+.topbar-lugares .field-topo > label{
+  margin:0;flex:none;font-size:11px;color:var(--txt-dim);white-space:nowrap;
+}
+.field-topo .combo{flex:1;min-width:0}
+.field-topo input{padding-top:6px;padding-bottom:6px;font-size:13px}
+/* A dica vira legenda sob o campo, fora do fluxo: no fluxo ela empurrava a
+   linha inteira para baixo só para repetir o que o campo já diz. */
+.topbar-lugares .field-topo > .hint{
+  position:absolute;left:0;right:0;top:100%;margin:1px 0 0;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.topbar-linha-1{padding-bottom:13px}        /* espaço para as legendas */
+
+.topbar-linha-2{gap:14px}
+.orcamento{flex-direction:row;align-items:center;gap:12px}
+.orcamento-rotulo{flex:none;font-size:10.5px;text-align:left}
+.orcamento-valor{flex-direction:row;align-items:center;gap:8px;width:auto}
+.orcamento-valor .money{width:118px}
+.orcamento-valor .money input{padding-top:5px;padding-bottom:5px;font-size:16px}
+.orcamento-valor .hint{text-align:left;font-size:10px;white-space:nowrap}
+.seg-moeda .seg-btn{padding:4px 9px;font-size:11.5px}
+.topbar .icon-btn{width:26px;height:26px;font-size:12px}
+
+/* ---- lateral: campos mais baixos, menos ar entre eles ---- */
+.sidebar .panel{padding:12px 12px 4px}
+.sidebar .field{margin-bottom:11px}
+.sidebar label{font-size:11px;margin-bottom:4px}
+.sidebar input,.sidebar select{padding:6px 10px;font-size:13px}
+.sidebar .seg-btn{padding:5px 8px;font-size:11.5px}
+.sidebar .hint{font-size:10px;line-height:1.35;margin-top:4px}
+.sidebar .grid-2{gap:8px}
+.quando-bloco{margin-bottom:2px}
+/* O anúncio da lateral não precisa de 250 px de altura reservados enquanto
+   não existe anúncio nenhum: isso empurrava o formulário para fora da tela. */
+.sidebar .ad-slot{min-height:180px;margin:10px 12px 12px}
+
+/* ---- barra inferior: mesma informação, menos moldura ---- */
+.details-body{padding:0 14px 14px}
+.dgrid{gap:14px}
+.dcol h4{font-size:10px;margin-bottom:7px;padding-bottom:5px}
+.resumo-linha{padding-bottom:8px;margin-bottom:10px;gap:14px}
+.resumo-saldo{font-size:12px}
+.resumo-saldo b{font-size:14px}
+.conexao.duas-opcoes{gap:10px}
+.conexao.duas-opcoes .caminho{padding:9px 11px}
+.conexao-preco{font-size:19px}
+.conexao-head{gap:10px}
+.perna{font-size:11.5px}
+.opt{padding:7px 9px;margin-bottom:5px}
+.opt-price{font-size:17px}
+.ad-strip{margin:12px 0 2px;padding-top:12px}
+.ad-strip .ad-slot{min-height:86px}
+
+/* O aviso legal é longo e é lido uma vez: em corpo menor e duas colunas ele
+   deixa de disputar altura com os voos, sem sair da tela. */
+/* O aviso é longo e é lido uma vez. Em resumo de uma linha ele continua sempre
+   à vista — o que a lei pede —, e o texto inteiro fica a um clique, sem cobrar
+   100 px de altura do mapa em toda visita. */
+.aviso-legal{
+  font-size:10px;line-height:1.5;padding:7px 14px;color:var(--txt-faint);
+  border-top:1px solid var(--line-soft);
+}
+.aviso-legal summary{
+  cursor:pointer;list-style:none;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+}
+.aviso-legal summary::-webkit-details-marker{display:none}
+.aviso-legal summary i{color:var(--accent);font-style:normal;font-weight:600}
+.aviso-legal[open] summary{white-space:normal}
+.aviso-legal[open] summary i{display:none}
+.aviso-legal p{margin:6px 0 0}
+.aviso-legal b{color:var(--txt-dim)}
+
+/* ---- linhas de voo: a maior conta de altura da barra ----
+   Três trechos a 45 px somavam 135 px, mais que o dobro do cabeçalho do card.
+   Cada linha carrega três dados curtos (rota, horário, preço) e não precisa de
+   altura de botão: em 34 px continuam clicáveis, e os 33 px economizados são a
+   diferença entre caber e obrigar a rolar. */
+a.perna.is-link{padding:4px 8px}
+.perna{gap:6px;font-size:11.5px}
+.perna-seta{line-height:1.35;padding-left:12px}
+.conexao-bloco{display:flex;flex-direction:column;gap:1px}
+.conexao-rot{margin-top:4px}
+.conexao-nota{margin-top:5px}
+.trecho{padding:3px 0}
+
+/* ============ FOCO NO TRAJETO ==========================================
+   Com um destino aberto, cem pílulas de preço disputam atenção com a única
+   que a pessoa está lendo. O mapa fica com o trajeto, as duas pontas e mais
+   nada — e o arco, que antes se perdia no meio dos pinos, passa a ser a
+   figura óbvia da tela.
+
+   Some por opacidade e não por display:none: o pino continua ocupando o seu
+   lugar, então sair do foco não recalcula nada nem faz o mapa piscar. */
+.map-wrap.foco .pin:not(.is-selected):not(.pin-origin){
+  opacity:0;pointer-events:none;transition:opacity .25s ease;
+}
+.map-wrap .pin{transition:opacity .25s ease, transform .12s}
+
+/* A legenda explica cores de pinos que não estão mais na tela. */
+.map-wrap.foco .map-legend{opacity:0;pointer-events:none;transition:opacity .25s}
+.map-legend{transition:opacity .25s}
+
+/* Sem a concorrência, o destino escolhido pode crescer um pouco e ficar
+   claramente "o" ponto da vez. */
+.map-wrap.foco .pin.is-selected{transform:translate(-50%,-50%) scale(1.12)}
+
+/* Os dois campos de data lado a lado ficavam com ~120 px cada e o widget
+   nativo do navegador aparecia cortado. Empilhados, cada um usa a largura
+   inteira da lateral e o calendário cabe. */
+#blocoDatas .grid-2{grid-template-columns:1fr;gap:9px}
+#blocoDatas input[type=date]{width:100%;min-width:0}
+
+/* Link de privacidade no rodapé do aviso legal: exigência do AdSense é que
+   ele exista e seja alcançável de qualquer página. */
+.aviso-legal p a{color:var(--accent);font-weight:600}
+
+/* Sem destino escolhido a alça não promete expansão que não existe: some a
+   seta e o cursor deixa de convidar ao clique. */
+.details[data-state=collapsed] .details-handle{cursor:default;padding:9px 16px}
+.details[data-state=collapsed] .details-handle:hover{background:transparent}
+.details[data-state=collapsed] .details-handle-chevron{display:none}
