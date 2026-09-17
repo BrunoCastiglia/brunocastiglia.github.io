@@ -1397,6 +1397,11 @@ function registrarTarifaEncontrada(destId, direto, destApt) {
     airportKm: 0,
   });
   state.viaEscala.delete(destId);
+  // Um voo direto de verdade substitui qualquer caminho com escala fixado
+  // antes dele — senão o mapa segue mostrando o hub antigo ao lado do texto
+  // "voo direto", como a reta tracejada já fazia antes de existir a checagem
+  // em paintSelection.
+  if (state.caminho?.destId === destId) state.caminho = null;
   setFareStatus('ok');
   search({ refit:false });
 }
