@@ -352,19 +352,10 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   grid-area:details;background:var(--bg-2);border-top:1px solid var(--line);
   display:flex;flex-direction:column;z-index:1000;
 }
-/* Estado de descanso: sem destino escolhido, a barra não some — fica uma
-   faixa baixa com os anúncios à vista e nada mais.
-   Não é decoração: um anúncio montado dentro de um elemento display:none
-   contaria impressão sem ninguém poder vê-lo, o que o AdSense proíbe. Ou os
-   espaços aparecem, ou não podem ser montados. */
+/* Sem destino escolhido não há conteúdo do editor nessa barra — some junto
+   com o resto. Anúncio sem conteúdo ao lado é o que o AdSense chama de
+   "anúncio em tela sem conteúdo do editor" e recusa. */
 .details[data-state=collapsed] .details-body{display:none}
-.com-anuncios .details[data-state=collapsed] .details-body{
-  display:block;height:auto;overflow:visible;padding-bottom:10px;
-}
-/* nesse estado só a faixa de anúncios interessa; o convite já está na alça */
-.com-anuncios .details[data-state=collapsed] .details-body > :not(.ad-strip){display:none}
-.com-anuncios .details[data-state=collapsed] .ad-strip{margin:0;padding-top:0;border-top:0}
-.com-anuncios .details[data-state=collapsed] .ad-strip .ad-slot{min-height:72px}
 .details[data-state=open] .details-body{display:block;height:var(--details-h)}
 .details[data-state=open] .details-handle-chevron{transform:rotate(180deg)}
 

@@ -30,12 +30,6 @@ export const ADS = {
   },
 };
 
-/* Marca o documento quando há anúncio para valer.
-   A barra inferior só fica em estado de descanso — baixa, com a faixa à vista —
-   quando existe anúncio a mostrar. Sem isso ela reservaria 110 px de tela para
-   exibir caixas vazias a quem visita o site. */
-if (ADS.ENABLED) document.documentElement.classList.add('com-anuncios');
-
 /** Monta um bloco de anúncio dentro do elemento indicado. */
 export function mountAd(el, slotKey) {
   if (!el || !ADS.ENABLED || !ADS.SLOTS[slotKey]) return;
