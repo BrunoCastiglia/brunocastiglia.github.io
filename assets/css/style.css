@@ -811,6 +811,24 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 }
 .sem-confirmado b{color:var(--txt-dim)}
 
+/* De quais aeroportos sair. Fica junto dos outros filtros porque é a escolha
+   que mais muda o resultado — e quem mora entre dois aeroportos precisa ver
+   que ela existe, em vez de aceitar a que o site fez sozinho. */
+.filtro-saidas{
+  position:static;display:flex;align-items:center;flex-wrap:wrap;gap:5px;
+  padding:6px 9px;
+}
+.filtro-saidas-tit{font-size:10px;color:var(--txt-faint);margin-right:2px}
+.saida-chip{
+  display:flex;align-items:baseline;gap:4px;cursor:pointer;
+  padding:3px 8px;border-radius:999px;font-size:11px;font-weight:750;
+  border:1px solid var(--line);background:transparent;color:var(--txt-faint);
+  transition:background .14s,color .14s,border-color .14s;
+}
+.saida-chip i{font-style:normal;font-size:9px;font-weight:600;opacity:.7}
+.saida-chip:hover{border-color:var(--origin);color:var(--txt)}
+.saida-chip.is-on{background:var(--origin);color:var(--origin-ink);border-color:var(--origin)}
+
 /* dois botões de filtro no mapa */
 .map-filtros{
   position:static;

@@ -6,7 +6,7 @@
    2) Nominatim/OpenStreetMap — qualquer cidade do mundo, sem chave de API.
    ======================================================================== */
 
-import { DESTINATIONS } from './destinations.js?v=68';
+import { DESTINATIONS } from './destinations.js?v=70';
 
 /* Cidades que costumam ser origem mas não estão na lista de destinos */
 const EXTRA_ORIGINS = [
@@ -73,6 +73,76 @@ export function searchLocal(query, limit = 6) {
 
 /** Busca global no OpenStreetMap (Nominatim). Sem chave, uso leve. */
 export async function searchRemote(query, signal) {
+  // O autocomplete de viagem primeiro: ele conhece código de aeroporto, e o
+  // mapa geográfico não. Mas ele só conhece lugares COM aeroporto, e quando
+  // não acha responde por semelhança sonora: "Nuoro" voltava como Bucara, no
+  // Uzbequistão. Por isso a resposta é conferida antes de valer.
+  const viagem = await autocompleteDeViagem(query, signal).catch(() => []);
+  if (viagem.length) return viagem;
+  return geocodificar(query, signal);
+}
+
+/**
+ * Autocomplete do Aviasales: cidades e aeroportos, com código IATA.
+ *
+ * O Nominatim responde "Campinas, Brasil" e uma coordenada — e o site tinha de
+ * adivinhar o aeroporto por distância, que foi justamente o chute que já o fez
+ * procurar em Fiumicino quando a companhia voa para Ciampino. Este devolve
+ * "Campinas → VCP, cidade SAO": o código do aeroporto e a cidade a que ele
+ * pertence, que é a informação que faltava.
+ *
+ * Sem chave e com CORS aberto, então pode ser chamado do navegador.
+ */
+async function autocompleteDeViagem(query, signal) {
+  const url = 'https://autocomplete.travelpayouts.com/places2?'
+    + new URLSearchParams({ term: query, locale: 'pt' })
+    + '&types[]=city&types[]=airport';
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error('autocomplete ' + res.status);
+
+  const vistos = new Set();
+  const saida = [];
+  for (const p of await res.json()) {
+    const lat = p.coordinates?.lat, lon = p.coordinates?.lon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    // Uma linha por cidade: o aeroporto entra só quando a cidade dele não veio
+    // na lista, senão "Lisboa" e "Aeroporto de Lisboa" viram duas opções que
+    // levam ao mesmo lugar.
+    const chave = p.city_code || p.code;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+
+    /* O nome do próprio lugar, e não o da cidade a que o aeroporto pertence.
+       Quem digitou "Campinas" recebia "São Paulo", porque Viracopos é contado
+       como aeroporto de São Paulo — a informação é útil, mas como complemento,
+       não no lugar do nome que a pessoa procurou. */
+    const nome = (p.name || '').trim();
+    const cidadeMae = p.type === 'airport' && p.city_name && p.city_name !== nome
+      ? p.city_name : null;
+
+    saida.push({
+      city: nome,
+      country: [p.country_name, cidadeMae && `via ${cidadeMae}`].filter(Boolean).join(' · '),
+      lat, lon,
+      iata: p.type === 'airport' ? p.code : null,
+      cityCode: p.city_code || (p.type === 'city' ? p.code : null),
+      remote: true,
+    });
+  }
+
+  /* O autocomplete responde por semelhança quando não tem o lugar: "Nuoro"
+     devolvia Bucara, Ercan e Deli. Só vale o que de fato começa pelo que foi
+     digitado; o resto é ruído, e para esses o mapa do OpenStreetMap responde
+     melhor — ele conhece cidade sem aeroporto. */
+  const alvo = norm(query);
+  const combinam = saida.filter(o => norm(o.city).startsWith(alvo) || norm(o.city).includes(alvo));
+  return combinam.slice(0, 6);
+}
+
+/** O mapa do OpenStreetMap, para lugares que não são cidade de aeroporto. */
+async function geocodificar(query, signal) {
   const url = 'https://nominatim.openstreetmap.org/search'
     + '?format=jsonv2&addressdetails=1&limit=5&accept-language=pt-BR'
     + '&featureType=city&q=' + encodeURIComponent(query);

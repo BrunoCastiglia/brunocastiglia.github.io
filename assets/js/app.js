@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=68';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=68';
-import * as GEO from './data/geo.js?v=68';
-import { ligadosPorTerra } from './data/landmass.js?v=68';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=68';
-import * as FX from './fx.js?v=68';
-import * as P from './providers/index.js?v=68';
-import { bookingLinks } from './links.js?v=68';
-import * as RYA from './providers/ryanair.js?v=68';
-import * as OSM from './providers/osm-stays.js?v=68';
-import * as TP from './providers/travelpayouts.js?v=68';
-import { mountAllAds } from './ads.js?v=68';
+import { DESTINATIONS } from './data/destinations.js?v=70';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=70';
+import * as GEO from './data/geo.js?v=70';
+import { ligadosPorTerra } from './data/landmass.js?v=70';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=70';
+import * as FX from './fx.js?v=70';
+import * as P from './providers/index.js?v=70';
+import { bookingLinks } from './links.js?v=70';
+import * as RYA from './providers/ryanair.js?v=70';
+import * as OSM from './providers/osm-stays.js?v=70';
+import * as TP from './providers/travelpayouts.js?v=70';
+import { mountAllAds } from './ads.js?v=70';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -59,7 +59,8 @@ const state = {
   vistosDe: null,         // de qual aeroporto colhido elas vieram
   hubs: [],               // aeroportos colhidos de onde dá para sair, com o trecho até lá
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
-  originAirports: [],     // até 3 aeroportos de partida, por distância
+  originAirports: [],     // todos os aeroportos de partida achados, por distância
+  saidasLigadas: null,    // quais deles a pessoa deixou ligados; null = todos
   enquadrePontos: null,   // trajeto do último enquadramento, para repeti-lo
   quando: 'duracao',      // como as datas são informadas: duracao | datas
   dataIda: '',            // modo datas: dia da ida (AAAA-MM-DD)
@@ -1000,6 +1001,73 @@ async function trechoDeAviaoAte(hub, saidas, signal, todas = false) {
   return barato.price + 15 < perto.price ? barato : perto;
 }
 
+/**
+ * Os aeroportos de partida que valem AGORA.
+ *
+ * O site escolhia sozinho e pronto: quem está em Pontevedra via Santiago e
+ * Porto misturados, sem poder dizer "só Santiago". A escolha automática
+ * continua — ela acerta na maioria das vezes e ninguém quer configurar um
+ * mapa antes de usá-lo —, mas virou uma pré-seleção.
+ *
+ * `saidasLigadas` nulo significa "não mexi em nada": vale a escolha do site.
+ * Depois que a pessoa mexe, vale o que ela disse, e nada aqui volta a decidir
+ * por ela.
+ */
+/**
+ * Os botões que ligam e desligam cada aeroporto de partida.
+ *
+ * Ficam junto dos outros filtros do mapa, e não escondidos num menu: são a
+ * primeira coisa que muda o resultado inteiro, e quem está numa cidade entre
+ * dois aeroportos precisa ver que a escolha existe.
+ */
+function desenharFiltroDeSaidas() {
+  const caixa = $('#filtroSaidas');
+  if (!caixa) return;
+
+  const todos = state.originAirports || [];
+  // Com um aeroporto só não há o que escolher, e o botão vira ruído.
+  caixa.hidden = todos.length < 2;
+  if (caixa.hidden) { caixa.innerHTML = ''; return; }
+
+  const ativos = new Set(saidasAtivas().map(a => a.iata));
+  caixa.innerHTML = `<span class="filtro-saidas-tit">Sair de</span>` + todos.map(a => `
+    <button type="button" class="saida-chip${ativos.has(a.iata) ? ' is-on' : ''}"
+            data-iata="${esc(a.iata)}" aria-pressed="${ativos.has(a.iata)}"
+            title="${esc(a.city || '')} — ${a.km} km de você">
+      ${esc(a.iata)}<i>${a.km} km</i>
+    </button>`).join('');
+
+  for (const b of caixa.querySelectorAll('.saida-chip')) {
+    b.addEventListener('click', () => alternarSaida(b.dataset.iata));
+  }
+}
+
+/** Liga ou desliga um aeroporto e refaz a busca com o que sobrou. */
+function alternarSaida(iata) {
+  const todos = (state.originAirports || []).map(a => a.iata);
+  // Da primeira vez partimos do que o site escolheu, que é o que está na tela.
+  const atual = new Set(state.saidasLigadas || saidasAtivas().map(a => a.iata));
+
+  if (atual.has(iata)) atual.delete(iata); else atual.add(iata);
+  if (!atual.size) return;                  // desligar o último não é uma escolha
+
+  state.saidasLigadas = new Set(todos.filter(i => atual.has(i)));
+  desenharFiltroDeSaidas();
+
+  // Outra lista de saídas é outra busca inteira: tarifas, malha e teia.
+  state.originAirport = saidasAtivas()[0] || null;
+  pedirTarifasReais(120);
+}
+
+function saidasAtivas() {
+  const todos = state.originAirports || [];
+  if (!state.saidasLigadas) return todos;
+  const ligados = todos.filter(a => state.saidasLigadas.has(a.iata));
+  // Desligar tudo deixaria o site sem de onde partir; nesse caso o filtro é
+  // ignorado em vez de mostrar uma tela vazia sem explicação.
+  return ligados.length ? ligados : todos;
+}
+
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
 let faresAbort;
 let faresPedido;
@@ -1087,8 +1155,10 @@ async function loadRealFares() {
     // está em Olbia tem Figari e Alghero mais perto que Cagliari, e Cagliari é
     // justamente a que mais voa. Quem sai de um, sai de qualquer um — o filtro
     // "só voo direto" precisa enxergar todos.
-    const saidas = RYA.nearestAirports(airports, state.origin, 260, 5);
-    state.originAirports = saidas;
+    state.originAirports = RYA.nearestAirports(airports, state.origin, 260, 5);
+    desenharFiltroDeSaidas();
+
+    const saidas = saidasAtivas();
     state.originAirport = saidas[0] || null;
     // Sem aeroporto da companhia por perto não há como voar até um hub, mas
     // ainda pode haver hub alcançável por terra — é o caso de quem sai de São
@@ -1385,7 +1455,7 @@ function setFareStatus(kind, progresso = null) {
   const apt = state.originAirport;
   // mostra só os aeroportos que de fato renderam alguma tarifa
   const usados = new Set([...state.realFares.values()].map(f => f.saida?.iata).filter(Boolean));
-  const saidas = state.originAirports
+  const saidas = saidasAtivas()
     .filter(a => usados.has(a.iata))
     .map(a => a.iata)
     .join(', ');
@@ -1405,7 +1475,7 @@ function setFareStatus(kind, progresso = null) {
                       const nomes = state.hubs.map(h => h.city || h.iata);
                       const mostra = nomes.slice(0, 3).join(', ');
                       const resto = nomes.length - 3;
-                      const daqui = state.originAirports.map(a => a.iata).join('/');
+                      const daqui = saidasAtivas().map(a => a.iata).join('/');
                       return `preços com escala em ${mostra}${resto > 0 ? ` +${resto}` : ''}`
                         + (daqui ? ` — saindo de ${daqui}` : '');
                     })()
@@ -1934,7 +2004,7 @@ async function vooMaisTerra(r, signal, maxKm = 350) {
     // Santander, a 100 km, a volta fecha em 25 h de escala. Quem marcou férias
     // não quer saber que "não dá": quer saber que dá, de ônibus até o
     // aeroporto ao lado.
-    const saida = state.originAirports?.[0];
+    const saida = saidasAtivas()[0];
     if (!saida) continue;
     // Uma conexão até o vizinho custa de 4 a 8 consultas, e há vários vizinhos:
     // fazer isso para todos é o tipo de leque que já nos rendeu um bloqueio da
@@ -2001,7 +2071,7 @@ async function prepararBuscaDeCaminhos(r) {
   // trajetos é toda da malha Ryanair. Deixar a caixa girando "procurando
   // caminhos até aqui" para quem sai de São Paulo é prometer um trabalho que
   // nunca vai acontecer.
-  if (!state.originAirports.length) {
+  if (!saidasAtivas().length) {
     caixa.hidden = true;
     return;
   }
@@ -2063,8 +2133,8 @@ async function tentarVooDireto(r) {
   // mais barata. Conferir a rota é de graça (cache de 30 dias); só gasta
   // consulta quando a rota existe.
   const ordem = confirmado
-    ? [confirmado.saida, ...state.originAirports.filter(s => s.iata !== confirmado.saida.iata)]
-    : state.originAirports;
+    ? [confirmado.saida, ...saidasAtivas().filter(s => s.iata !== confirmado.saida.iata)]
+    : saidasAtivas();
 
   for (const saida of ordem) {
     if (saida.iata === destApt.iata) continue;
@@ -2106,7 +2176,7 @@ async function buscarConexao(r) {
     cx.innerHTML = `<span class="conexao-load">${motivo}</span>`;
   };
 
-  const saidas = state.originAirports;
+  const saidas = saidasAtivas();
   if (!saidas.length || !state.airports.length) return desistir('sem malha para procurar caminhos daqui');
 
   const destApt = RYA.nearestAirport(state.airports, r.dest, 130);
@@ -2419,7 +2489,7 @@ async function mostrarAlternativas(r, signal) {
   if (!caixa || !v?.hub) return;
 
   const [saidasTodas, duracoes] = await Promise.all([
-    trechoDeAviaoAte(v.hub, state.originAirports, signal, true),
+    trechoDeAviaoAte(v.hub, saidasAtivas(), signal, true),
     TP.outrasDuracoes(v.hub.iata, state.month, r.dest.id, v.f, state.days),
   ]);
   if (signal?.aborted || state.selected !== r.dest.id) return;
@@ -2732,6 +2802,9 @@ const highlight = () => $$('#originList .combo-item')
  * @param {object} opts salvar: grava a escolha (só para escolha manual)
  */
 function pickOrigin(o, { salvar = true } = {}) {
+  // Outra cidade, outros aeroportos: a escolha anterior não quer dizer nada
+  // aqui, e mantê-la deixaria a pessoa filtrando por siglas de outro lugar.
+  if (o?.city !== state.origin?.city) state.saidasLigadas = null;
   state.origin = o;
   $('#origin').value = o.city;
 
@@ -3320,7 +3393,7 @@ function diasDoTrajeto(c) {
 function saidaTexto(fare) {
   const s = fare?.saida;
   if (!s) return '';
-  const perto = state.originAirports[0];
+  const perto = achados[0];
   const extra = (perto && s.iata !== perto.iata) || s.km > 40
     ? `, a ${s.km} km de você` : '';
   return `parte de <b>${esc(s.iata)}</b>${extra}`;
