@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=66';
-import { ligadosPorTerra } from '../data/landmass.js?v=66';
+import { distanceKm } from '../engine.js?v=68';
+import { ligadosPorTerra } from '../data/landmass.js?v=68';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -174,6 +174,40 @@ export function linkDaOferta(oferta) {
   const url = new URL(oferta.url, 'https://www.aviasales.com');
   if (marker) url.searchParams.set('marker', marker);
   return url.toString();
+}
+
+/**
+ * As outras durações da MESMA viagem, para o mesmo destino e mês.
+ *
+ * O site pergunta quantos dias e responde com uma faixa só. Mas a pessoa que
+ * pediu uma semana muitas vezes topa cinco noites ou dez — e a diferença de
+ * preço entre as faixas costuma ser grande. Isto já estava no arquivo colhido,
+ * guardado e nunca mostrado: não custa nenhuma consulta nova.
+ */
+export async function outrasDuracoes(iata, month, destId, faixaAtual, dias = 7) {
+  const dados = await carregarOrigem(iata);
+  if (!dados?.meses) return [];
+
+  const hoje = new Date();
+  const ano = month < hoje.getMonth() ? hoje.getFullYear() + 1 : hoje.getFullYear();
+  const doMes = dados.meses[`${ano}-${String(month + 1).padStart(2, '0')}`];
+  if (!doMes?.length) return [];
+
+  const melhores = new Map();
+  for (const f of doMes) {
+    if (f.d !== destId || f.f === faixaAtual) continue;
+    // Quem pediu uma semana pode topar cinco noites ou dez; 43 noites é outra
+    // decisão de vida, não uma alternativa. A faixa "longa" vai até sessenta,
+    // e sem este corte ela aparecia como se fosse a mesma viagem mais barata.
+    if (f.n > dias * 2.5) continue;
+    const antes = melhores.get(f.f);
+    if (!antes || antes.p > f.p) melhores.set(f.f, f);
+  }
+  // As mais parecidas com o que foi pedido primeiro, e no máximo duas: a lista
+  // é um complemento, não outro cardápio.
+  return [...melhores.values()]
+    .sort((a, b) => Math.abs(a.n - dias) - Math.abs(b.n - dias))
+    .slice(0, 2);
 }
 
 /* ------------------------------------------------------ companhias ------ */

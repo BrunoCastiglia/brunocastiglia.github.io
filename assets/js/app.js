@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=66';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=66';
-import * as GEO from './data/geo.js?v=66';
-import { ligadosPorTerra } from './data/landmass.js?v=66';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=66';
-import * as FX from './fx.js?v=66';
-import * as P from './providers/index.js?v=66';
-import { bookingLinks } from './links.js?v=66';
-import * as RYA from './providers/ryanair.js?v=66';
-import * as OSM from './providers/osm-stays.js?v=66';
-import * as TP from './providers/travelpayouts.js?v=66';
-import { mountAllAds } from './ads.js?v=66';
+import { DESTINATIONS } from './data/destinations.js?v=68';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=68';
+import * as GEO from './data/geo.js?v=68';
+import { ligadosPorTerra } from './data/landmass.js?v=68';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=68';
+import * as FX from './fx.js?v=68';
+import * as P from './providers/index.js?v=68';
+import { bookingLinks } from './links.js?v=68';
+import * as RYA from './providers/ryanair.js?v=68';
+import * as OSM from './providers/osm-stays.js?v=68';
+import * as TP from './providers/travelpayouts.js?v=68';
+import { mountAllAds } from './ads.js?v=68';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -955,8 +955,9 @@ async function varrerHubs(saidas, signal) {
  * pessoa se virar para chegar a Roma é o oposto do que este site faz — e o
  * orçamento ficava sem uma passagem inteira dentro.
  */
-async function trechoDeAviaoAte(hub, saidas, signal) {
+async function trechoDeAviaoAte(hub, saidas, signal, todas = false) {
   if (!saidas?.length || !state.airports.length) return null;
+  const achados = [];
 
   /* TODOS os aeroportos da companhia que servem aquela cidade. Em Roma a longa
      distância sai de Fiumicino e a low cost pousa em Ciampino, a 29 km — pegar
@@ -980,10 +981,23 @@ async function trechoDeAviaoAte(hub, saidas, signal) {
       const preco = await RYA.directRoundTrip(
         saida.iata, chegada.iata, state.month, state.days, signal);
       if (signal?.aborted) return null;
-      if (preco) return { saida, chegada, price: preco.price, ida: preco.ida, volta: preco.volta };
+      if (!preco) continue;
+
+      achados.push({ saida, chegada, price: preco.price, ida: preco.ida, volta: preco.volta });
+      break;                      // um por aeroporto de casa, o mais barato dali
     }
   }
-  return null;
+  if (todas) return achados;
+  if (!achados.length) return null;
+
+  /* Sair do aeroporto ao lado vale mais que economizar uns trocados a duzentos
+     quilômetros — mas só até certo ponto. Pegando sempre o mais próximo, o
+     site escolhia OLB → Bergamo por € 66 tendo AHO → Milão por € 30 na mesma
+     lista: € 36 numa viagem de € 206 não é "uns trocados", é 17%. Até € 15 de
+     diferença fica o mais perto; acima disso, ganha o mais barato. */
+  const perto = achados[0];
+  const barato = achados.reduce((a, b) => (b.price < a.price ? b : a));
+  return barato.price + 15 < perto.price ? barato : perto;
 }
 
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
@@ -2381,8 +2395,68 @@ async function montarTrajetoriaVista(r, signal) {
       ${href ? `<a class="visto-link" href="${href}" target="_blank" rel="noopener nofollow">
                   conferir no Aviasales →</a>` : ''}
       <br>São <b>reservas separadas</b>: um atraso no primeiro trecho não é coberto pelo segundo.
-    </p>`;
+    </p>
+    <div id="alternativasBox"></div>`;
+
+  mostrarAlternativas(r, signal);      // chega depois, sem segurar a trajetória
   return true;
+}
+
+/**
+ * "E se eu sair do outro aeroporto?" e "e se eu mudar a duração?".
+ *
+ * Duas perguntas que quem planeja faz sempre e que o site respondia com uma
+ * resposta só, fechada. As duas saem barato: os outros aeroportos de casa já
+ * são consultados na busca do trecho, e as outras durações já estão no arquivo
+ * colhido — guardadas e nunca mostradas.
+ *
+ * Roda depois de a trajetória aparecer, porque é complemento: quem já decidiu
+ * não precisa esperar por ela.
+ */
+async function mostrarAlternativas(r, signal) {
+  const caixa = $('#alternativasBox');
+  const v = r.visto;
+  if (!caixa || !v?.hub) return;
+
+  const [saidasTodas, duracoes] = await Promise.all([
+    trechoDeAviaoAte(v.hub, state.originAirports, signal, true),
+    TP.outrasDuracoes(v.hub.iata, state.month, r.dest.id, v.f, state.days),
+  ]);
+  if (signal?.aborted || state.selected !== r.dest.id) return;
+
+  const atual = v.trecho?.saida?.iata;
+  const outras = (saidasTodas || []).filter(x => x.saida.iata !== atual);
+
+  const blocos = [];
+
+  if (outras.length) {
+    blocos.push(`
+      <p class="conexao-nota"><b>Se preferir sair de outro aeroporto</b> daqui:</p>
+      ${outras.map(o => `
+        <div class="alt-linha">
+          <span><b>${esc(o.saida.iata)}</b> → ${esc(o.chegada.iata)}
+            <i>${o.saida.km} km de você</i></span>
+          <span class="alt-preco">${fmt(o.price)}
+            <i>${o.price === v.trecho.price ? 'mesmo preço'
+                 : o.price < v.trecho.price ? `${fmt(v.trecho.price - o.price)} mais barato`
+                 : `${fmt(o.price - v.trecho.price)} mais caro`}</i></span>
+        </div>`).join('')}`);
+  }
+
+  if (duracoes.length) {
+    blocos.push(`
+      <p class="conexao-nota"><b>Se puder mudar a duração</b>, o mesmo destino no mesmo mês:</p>
+      ${duracoes.map(d => `
+        <div class="alt-linha">
+          <span>${d.n} noites <i>${fmtDate(d.ida)} → ${fmtDate(d.volta)}</i></span>
+          <span class="alt-preco">${fmt(d.p + (v.trecho?.price || 0))}
+            <i>${d.p < v.p ? `${fmt(v.p - d.p)} mais barato` : `${fmt(d.p - v.p)} mais caro`}</i></span>
+        </div>`).join('')}`);
+  }
+
+  caixa.innerHTML = blocos.length
+    ? `<div class="alternativas">${blocos.join('')}</div>`
+    : '';
 }
 
 function pernaVoo(p, rotulo, people) {

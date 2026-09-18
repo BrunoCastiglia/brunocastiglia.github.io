@@ -35,17 +35,6 @@ jobs:
         with:
           node-version: '20'
 
-      # Passo temporário: mostra o formato real de nearest-places-matrix nos
-      # registros, para a coleta ser desenhada em cima do que a API devolve e
-      # não em cima de uma suposição. Sai assim que a coleta estiver escrita.
-      - name: Sondar a matriz de vizinhos
-        if: github.event_name == 'workflow_dispatch'
-        continue-on-error: true
-        env:
-          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
-          TRAVELPAYOUTS: ${{ secrets.TRAVELPAYOUTS }}
-        run: node scripts/sondar-matriz.mjs
-
       - name: Coletar tarifas
         env:
           # Os dois nomes, porque o segredo pode ter sido criado de qualquer

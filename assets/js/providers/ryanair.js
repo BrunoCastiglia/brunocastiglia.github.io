@@ -17,8 +17,8 @@
      é silenciosa e o site volta sozinho para a estimativa.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=66';
-import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=66';
+import { distanceKm } from '../engine.js?v=68';
+import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=68';
 
 const AIRPORTS_URL = 'https://www.ryanair.com/api/views/locate/5/airports/en/active';
 const FARES_URL    = 'https://services-api.ryanair.com/farfnd/v4/roundTripFares';
