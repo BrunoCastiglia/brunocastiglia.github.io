@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=52';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=52';
-import * as GEO from './data/geo.js?v=52';
-import { ligadosPorTerra } from './data/landmass.js?v=52';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=52';
-import * as FX from './fx.js?v=52';
-import * as P from './providers/index.js?v=52';
-import { bookingLinks } from './links.js?v=52';
-import * as RYA from './providers/ryanair.js?v=52';
-import * as OSM from './providers/osm-stays.js?v=52';
-import * as TP from './providers/travelpayouts.js?v=52';
-import { mountAllAds } from './ads.js?v=52';
+import { DESTINATIONS } from './data/destinations.js?v=54';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=54';
+import * as GEO from './data/geo.js?v=54';
+import { ligadosPorTerra } from './data/landmass.js?v=54';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=54';
+import * as FX from './fx.js?v=54';
+import * as P from './providers/index.js?v=54';
+import { bookingLinks } from './links.js?v=54';
+import * as RYA from './providers/ryanair.js?v=54';
+import * as OSM from './providers/osm-stays.js?v=54';
+import * as TP from './providers/travelpayouts.js?v=54';
+import { mountAllAds } from './ads.js?v=54';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -57,6 +57,7 @@ const state = {
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   vistos: new Map(),      // id do destino -> tarifa vista no Aviasales (arquivo do dia)
   vistosDe: null,         // de qual aeroporto colhido elas vieram
+  ateOHub: null,          // o voo daqui até esse aeroporto, quando ele fica longe
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
   originAirports: [],     // até 3 aeroportos de partida, por distância
   enquadrePontos: null,   // trajeto do último enquadramento, para repeti-lo
@@ -800,6 +801,7 @@ function search({ refit = true } = {}) {
       days: state.days, people: state.people, month: state.month, style: state.style,
       mode: state.mode, budgetEUR: budgetEUR(),
       sortBy: state.sortBy, realFares: state.realFares, vistos: state.vistos,
+      ateOHub: state.ateOHub,
       filtro: state.filtro, viaEscala: state.viaEscala, bounds: areaVisivel(),
       temVooDireto: state.temVooDireto,
       manterId: state.selected,
@@ -955,6 +957,11 @@ async function loadRealFares() {
       return setFareStatus(state.vistos.size ? 'vistos' : 'uncovered');
     }
     if (state.abrindo) mostrarSaidas(saidas);
+
+    // O voo daqui até o aeroporto de onde as tarifas vistas partem. Roda agora,
+    // e não no clique, porque o trecho é o MESMO para todos os destinos
+    // daquele hub: uma consulta resolve as cinquenta ofertas de uma vez.
+    procurarTrechoAteOHub(saidas, signal);
 
     const porIata = new Map(airports.map(a => [a.iata, a]));
 
@@ -1213,6 +1220,63 @@ async function precoDeUmaEscala(novos, alcance, ctx) {
   }
 }
 
+/**
+ * Acha e precifica o voo daqui até o aeroporto de onde as tarifas vistas saem.
+ *
+ * Sem isto o site mostrava "Rio por € 1028 saindo de Roma" para quem está numa
+ * ilha, e deixava a pessoa se virar para chegar a Roma. Era justamente o que o
+ * site existe para não fazer: o orçamento não fechava e o caminho ficava pela
+ * metade. Como o trecho é o mesmo para todos os destinos daquele hub, uma
+ * consulta conserta a lista inteira.
+ *
+ * Se não houver voo daqui até lá, `price` fica zero e o motor descarta as
+ * tarifas vistas: uma estimativa honesta é melhor que um total que não se
+ * cumpre.
+ */
+async function procurarTrechoAteOHub(saidas, signal) {
+  const de = state.vistosDe?.origem;
+  state.ateOHub = null;
+  if (!de || de.porTerra !== false) return;      // dá para ir de carro: nada a fazer
+
+  state.ateOHub = { necessario: true, price: 0, hub: null, saida: null, buscando: true };
+  search({ refit:false });
+
+  /* TODOS os aeroportos da companhia que servem aquela cidade, e não só o mais
+     próximo. Em Roma a longa distância sai de Fiumicino e a low cost pousa em
+     Ciampino, a 29 km dali — pegar apenas o mais próximo devolvia Fiumicino,
+     para onde a Ryanair não voa, e a busca desistia com a resposta na mão. */
+  const hubs = RYA.nearestAirports(state.airports, de, 130, 4);
+  if (!hubs.length) { state.ateOHub.buscando = false; return void search({ refit:false }); }
+
+  // Saídas na ordem de quem está perto de casa: sair do aeroporto ao lado vale
+  // mais que economizar dez euros saindo de um a duzentos quilômetros.
+  for (const saida of saidas) {
+    if (signal.aborted || RYA.estaBloqueado()) break;
+
+    const rotas = await RYA.routesFrom(saida.iata, signal);
+    if (signal.aborted) return;
+
+    for (const hub of hubs) {
+      if (saida.iata === hub.iata) continue;
+      if (!rotas.some(r => r.iata === hub.iata)) continue;
+
+      const preco = await RYA.directRoundTrip(saida.iata, hub.iata, state.month, state.days, signal);
+      if (signal.aborted) return;
+      if (!preco) continue;
+
+      state.ateOHub = {
+        necessario: true, buscando: false,
+        price: preco.price, saida, hub, ida: preco.ida, volta: preco.volta,
+      };
+      search({ refit:false });
+      return;
+    }
+  }
+
+  state.ateOHub.buscando = false;
+  search({ refit:false });
+}
+
 /* haversine enxuto, só para casar aeroporto com cidade */
 function distanciaSimples(a, b) {
   const rad = d => d * Math.PI / 180;
@@ -1425,16 +1489,30 @@ function textoSemConfirmado(r) {
   // O preço visto tem nome, voo e data — dizer isso vale muito mais que
   // "sem preço confirmado". Mas o que ele NÃO é precisa vir junto, na mesma
   // frase: ninguém conferiu que ainda está lá.
+  // A tarifa existe, mas não achamos como chegar ao aeroporto de onde ela parte.
+  // Dizer isso vale mais que esconder — e o total volta a ser a estimativa,
+  // porque somar só a segunda perna daria um número que não se cumpre.
+  if (r.vistoSemCaminho) {
+    const v = r.vistoSemCaminho;
+    const cidade = state.vistosDe?.origem?.city || 'o aeroporto de saída';
+    return `Existe voo para cá por <b>${fmt(v.p)}</b> ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))}
+            saindo de <b>${esc(cidade)}</b> — mas não encontramos voo daqui até lá, e sem esse
+            trecho o total não fecha. Por isso o resumo mostra ${valor}, que é estimativa.`;
+  }
+
   if (r.visto) {
     const v = r.visto;
     const quando = v.ida && v.volta ? `${fmtDate(v.ida)} → ${fmtDate(v.volta)}` : '';
     const de = state.vistosDe?.origem;
-    const saindo = de
-      ? ` <b>partindo de ${esc(de.city)} (${esc(de.iata)})</b>`
-        + (de.porTerra === false
-            ? `, que fica a ${de.km} km <b>e não se chega por terra daqui</b> — o
-               trajeto até lá é por sua conta`
-            : de.km > 60 ? `, a ${de.km} km de você` : '')
+    const h = r.ateOHub;
+    // Quando o voo longo parte de outra ilha ou continente, o caminho tem duas
+    // pernas e as duas precisam estar na frente da pessoa — com preço. Mostrar
+    // só a segunda é dar um orçamento que não fecha.
+    const saindo = !de ? ''
+      : h ? ` <b>partindo de ${esc(de.city)} (${esc(h.hub.iata)})</b>, aonde você chega
+             com o voo de <b>${esc(h.saida.iata)} → ${esc(h.hub.iata)}</b> por
+             <b>${fmt(h.price)}</b> ida e volta — já somado ao total acima`
+      : de.km > 60 ? ` partindo de ${esc(de.city)} (${esc(de.iata)}), a ${de.km} km de você`
       : '';
     return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
             últimos dias${saindo} — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
