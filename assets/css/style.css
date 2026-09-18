@@ -638,6 +638,34 @@ body.is-resizing .details-body{pointer-events:none}
 .map-wrap.foco .teia-linha{opacity:0}
 .teia-linha{transition:opacity .25s}
 
+/* ===================== abertura: aeroportos de saída ==================== */
+/* Enquanto a teia se desenha, os preços recuam: o que a pessoa precisa ver é
+   de onde ela sai e até onde a malha chega. No fim eles voltam ao normal. */
+.map-wrap.abrindo .pin:not(.pin-origin){opacity:.22}
+.pin, .teia-linha{transition:opacity .45s}
+
+.apt-pin{
+  position:absolute;left:0;top:0;transform:translate(-50%,-50%);
+  display:flex;align-items:baseline;gap:4px;white-space:nowrap;
+  padding:2px 7px;border-radius:999px;
+  background:var(--origin);color:var(--origin-ink);
+  border:1.5px solid rgba(255,255,255,.75);
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+  font-size:10.5px;line-height:1.5;
+  animation:apt-entra .45s cubic-bezier(.2,1.3,.4,1) backwards;
+}
+.map-wrap.longe .apt-pin{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+.apt-pin{transition:opacity .35s, transform .35s}
+.apt-pin b{font-weight:800;letter-spacing:.04em}
+.apt-pin i{font-style:normal;opacity:.75;font-size:9px}
+@keyframes apt-entra{
+  from{opacity:0;transform:translate(-50%,-50%) scale(.4)}
+  to  {opacity:1;transform:translate(-50%,-50%) scale(1)}
+}
+@media (prefers-reduced-motion:reduce){
+  .apt-pin{animation:none}
+}
+
 /* ================= arco da rota ao passar o mouse ====================== */
 .rota-layer{
   position:absolute;inset:0;z-index:450;pointer-events:none;

@@ -51,6 +51,8 @@ const state = {
   caminho: null,          // trajeto desenhado no mapa: { destId, pontos }
   caminhosPorDestino: new Map(),   // resultado da busca de caminhos, por destino
   intro: true,            // primeira abertura: anima do mundo até a origem
+  abrindo: false,         // a teia está se desenhando e o mapa a acompanha
+  mapaDaPessoa: false,    // ela mexeu no mapa: paramos de enquadrar sozinhos
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
   originAirports: [],     // até 3 aeroportos de partida, por distância
@@ -98,8 +100,9 @@ function initMap() {
   window.addEventListener('resize', syncSize);
   window.addEventListener('orientationchange', syncSize);
 
-  layerTeia = L.layerGroup().addTo(map);   // por baixo: as linhas da malha
-  layerDest = L.layerGroup().addTo(map);
+  layerTeia   = L.layerGroup().addTo(map);   // por baixo: as linhas da malha
+  layerDest   = L.layerGroup().addTo(map);
+  layerSaidas = L.layerGroup().addTo(map);   // por cima: os aeroportos de saída
   criarCamadaDeRota();
 }
 
@@ -137,6 +140,24 @@ function criarCamadaDeRota() {
   // dispara 'click' no mapa quando o clique NÃO foi num marcador, então clicar
   // noutro destino continua trocando de destino em vez de limpar.
   map.on('click', () => { if (state.selected || state.destinoAlvo) limparSelecao(); });
+
+  // Arrastar ou dar zoom durante a abertura encerra o enquadramento
+  // automático: a partir daí o mapa é de quem está navegando, e a teia
+  // continua acendendo onde ela deixou.
+  const assumir = () => { state.mapaDaPessoa = true; };
+  map.on('dragstart', assumir);
+
+  // De longe as pílulas dos aeroportos de saída se empilham umas nas outras e
+  // viram um borrão em cima da origem. Elas servem ao primeiro quadro da
+  // abertura, que é de perto; a partir do zoom 6 saem de cena.
+  const sincronizarSaidas = () =>
+    $('.map-wrap')?.classList.toggle('longe', map.getZoom() < 6);
+  map.on('zoomend', sincronizarSaidas);
+  $('#map')?.addEventListener('wheel', assumir, { passive:true });
+
+  // O Leaflet reescreve os caminhos ao mover; concluímos os traços em curso
+  // antes disso para nenhum ficar cortado no meio.
+  map.on('zoomstart movestart', finalizarTracos);
 }
 
 /**
@@ -369,8 +390,9 @@ function drawOrigin() {
    só o que existe de verdade — a teia é a prova visual de que nada passou em
    branco.
 */
-let layerTeia;
+let layerTeia, layerSaidas, teiaTimer, limiteTeia, ultimoEnquadre = 0;
 const teiaFeitas = new Set();
+const filaTeia = [];
 
 /** Arco suave entre dois pontos, em lat/lon, para acompanhar zoom e arrasto. */
 function arcoLatLng(a, b, n = 20) {
@@ -390,8 +412,14 @@ function arcoLatLng(a, b, n = 20) {
 }
 
 /**
- * Acende uma ligação na teia. Chamar duas vezes o mesmo par não faz nada, que
- * é o que permite chamá-la de dentro de cada lote sem contar o que já veio.
+ * Enfileira uma ligação da teia. Chamar duas vezes o mesmo par não faz nada,
+ * que é o que permite chamá-la de dentro de cada lote sem contar o que já veio.
+ *
+ * As linhas NÃO são desenhadas aqui. Elas entram numa fila que é drenada num
+ * ritmo próprio, e o motivo é simples: na segunda visita tudo vem do cache e as
+ * 160 ligações ficavam prontas em menos de um segundo — a teia aparecia inteira
+ * de uma vez, sem animação nenhuma. Separando a descoberta do desenho, a
+ * abertura tem o mesmo tempo com a rede lenta ou com o cache quente.
  */
 function acenderTeia(de, para, tipo) {
   if (!layerTeia || !de || !para) return;
@@ -399,16 +427,118 @@ function acenderTeia(de, para, tipo) {
   const chave = `${de.iata || de.lat},${para.iata || para.lat}`;
   if (teiaFeitas.has(chave)) return;
   teiaFeitas.add(chave);
+  filaTeia.push({ de, para, tipo });
+  if (!teiaTimer) teiaTimer = setInterval(drenarTeia, RITMO_MS);
+}
 
+/* Quem pediu menos movimento ao sistema recebe o resultado, não o espetáculo:
+   a teia aparece inteira de uma vez e o mapa não voa. */
+const semAnimacao = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const RITMO_MS = 70;          // um quadro da abertura
+const POR_QUADRO = 26;        // divisor da fila: quanto maior a fila, mais linhas por quadro
+// A folga entre dois enquadramentos é maior que a rede de segurança do voo
+// (900 ms) de propósito: com ela menor, cada chamada nova cancelava o
+// temporizador da anterior e o mapa só se mexia no fim de tudo.
+const PAUSA_ENQUADRE_MS = 1200;
+
+/**
+ * Desenha as ligações da fila e vai abrindo o enquadramento atrás delas.
+ *
+ * Quantas linhas por quadro depende do tamanho da fila: com a rede respondendo
+ * devagar sai uma de cada vez, acompanhando a descoberta; com tudo já em cache
+ * saem várias, e a teia inteira leva uns três segundos em vez de um piscar.
+ */
+function drenarTeia() {
+  if (state.intro) return;                 // o voo de entrada ainda está no ar
+  if (!filaTeia.length) {
+    clearInterval(teiaTimer);
+    teiaTimer = null;
+    if (state.varreduraPronta) fecharAbertura();
+    return;
+  }
+
+  // Da mais curta para a mais longa: a teia cresce de casa para fora, e o
+  // enquadramento pode ir abrindo junto. Sem isto, a primeira ligação a
+  // Dublin já obrigava o mapa a mostrar a Europa inteira no segundo quadro, e
+  // o resto da abertura acontecia num mapa parado.
+  filaTeia.sort((a, b) => distanciaSimples(state.origin, a.para)
+                        - distanciaSimples(state.origin, b.para));
+
+  const quantas = semAnimacao ? filaTeia.length
+                              : Math.max(1, Math.round(filaTeia.length / POR_QUADRO));
+  for (let i = 0; i < quantas && filaTeia.length; i++) {
+    const { de, para, tipo } = filaTeia.shift();
+    desenharLinhaDaTeia(de, para, tipo);
+    limiteTeia = limiteTeia
+      ? limiteTeia.extend([para.lat, para.lon]).extend([de.lat, de.lon])
+      : L.latLngBounds([[de.lat, de.lon], [para.lat, para.lon]]);
+  }
+  alargarParaTeia();
+}
+
+/**
+ * Abre o enquadramento só o suficiente para caber o que acabou de acender.
+ *
+ * O mapa não volta a fechar: a teia só cresce, então o zoom só sai. E se a
+ * pessoa mexer no mapa, paramos de mexer junto — quem está navegando manda.
+ */
+function alargarParaTeia() {
+  if (!limiteTeia || state.mapaDaPessoa || !state.abrindo) return;
+  const agora = Date.now();
+  if (agora - ultimoEnquadre < PAUSA_ENQUADRE_MS) return;
+  if (map.getBounds().pad(-0.06).contains(limiteTeia)) return;
+
+  ultimoEnquadre = agora;
+  finalizarTracos();            // o Leaflet reescreve os caminhos ao mover
+  voarPara(limiteTeia, [50, 50], 7);
+}
+
+/**
+ * Abre o mapa até caber `limites`, com a animação — e sem depender dela.
+ *
+ * O flyTo do Leaflet roda em requestAnimationFrame, que fica congelado com a
+ * aba em segundo plano: a abertura simplesmente não saía do lugar, e o mapa
+ * ficava preso no primeiro enquadramento. Calculamos o alvo antes, animamos, e
+ * se meio segundo depois nada andou, colocamos o mapa lá sem animar.
+ */
+function voarPara(limites, folga, tetoDeZoom) {
+  const alvo = Math.min(tetoDeZoom, map.getBoundsZoom(limites, false, L.point(folga)));
+  const centro = limites.getCenter();
+  if (Math.abs(map.getZoom() - alvo) < 0.15
+      && map.getBounds().pad(-0.06).contains(limites)) return;
+
+  if (semAnimacao) return map.setView(centro, alvo, { animate:false });
+
+  map.flyTo(centro, alvo, { duration:.8, easeLinearity:.35 });
+  clearTimeout(vooTimer);
+  vooTimer = setTimeout(() => {
+    if (Math.abs(map.getZoom() - alvo) > 0.4) map.setView(centro, alvo, { animate:false });
+  }, 900);
+}
+let vooTimer;
+
+/* Traços a meio caminho da animação. Mover ou dar zoom reescreve o atributo
+   `d` do caminho, e um dasharray preso ao comprimento antigo cortaria a linha
+   no lugar errado — então antes de mexer no mapa nós as concluímos na hora. */
+const tracejando = new Set();
+function finalizarTracos() {
+  for (const el of tracejando) {
+    el.style.transition = '';
+    el.style.strokeDasharray = '';
+    el.style.strokeDashoffset = '';
+  }
+  tracejando.clear();
+}
+
+function desenharLinhaDaTeia(de, para, tipo) {
   const linha = L.polyline(arcoLatLng(de, para), {
     className: `teia-linha teia-${tipo}`,
     interactive: false,
     weight: tipo === 'direta' ? 1.4 : 1,
   }).addTo(layerTeia);
 
-  // O traço cresce do começo ao fim, uma vez só. Depois a marcação é retirada
-  // do elemento: o Leaflet reescreve o caminho a cada zoom, e um dasharray
-  // preso ao comprimento antigo cortaria a linha no lugar errado.
+  // O traço cresce do começo ao fim, uma vez só.
   const el = linha.getElement();
   if (!el?.getTotalLength) return;
   const comp = el.getTotalLength();
@@ -417,7 +547,10 @@ function acenderTeia(de, para, tipo) {
   void el.getBoundingClientRect();
   el.style.transition = 'stroke-dashoffset .9s cubic-bezier(.32,.72,.3,1)';
   el.style.strokeDashoffset = '0';
+  tracejando.add(el);
   setTimeout(() => {
+    if (!tracejando.has(el)) return;
+    tracejando.delete(el);
     el.style.transition = '';
     el.style.strokeDasharray = '';
     el.style.strokeDashoffset = '';
@@ -426,7 +559,58 @@ function acenderTeia(de, para, tipo) {
 
 function limparTeia() {
   layerTeia?.clearLayers();
+  layerSaidas?.clearLayers();
   teiaFeitas.clear();
+  filaTeia.length = 0;
+  tracejando.clear();
+  clearInterval(teiaTimer);
+  teiaTimer = null;
+  limiteTeia = null;
+}
+
+/* ------------------------------------------- abertura: de onde se sai --- */
+/**
+ * Mostra os aeroportos que a busca vai consultar, antes de consultar.
+ *
+ * É o primeiro quadro da abertura: o mapa está fechado em cima de quem está
+ * olhando, e aparecem os aeroportos de onde se pode partir, com a distância de
+ * casa. Daí em diante o enquadramento só abre, acompanhando a teia.
+ */
+function mostrarSaidas(saidas) {
+  if (!layerSaidas) return;
+  layerSaidas.clearLayers();
+  if (!saidas.length) return;
+
+  for (const [i, a] of saidas.entries()) {
+    const m = L.marker([a.lat, a.lon], {
+      icon: L.divIcon({
+        className: 'pin-wrap',
+        html: `<div class="apt-pin" style="animation-delay:${i * 90}ms">
+                 <b>${esc(a.iata)}</b><i>${a.km} km</i></div>`,
+        iconSize: [0, 0],
+      }),
+      interactive: false,
+      zIndexOffset: 900,
+    });
+    m.addTo(layerSaidas);
+  }
+
+  // Enquadra a origem com os aeroportos: é o "de onde eu saio" inteiro na tela.
+  limiteTeia = L.latLngBounds([
+    [state.origin.lat, state.origin.lon],
+    ...saidas.map(a => [a.lat, a.lon]),
+  ]);
+  if (!state.mapaDaPessoa && !state.intro) {
+    ultimoEnquadre = Date.now();
+    voarPara(limiteTeia, [70, 70], 8);
+  }
+}
+
+/** Fim da abertura: os preços voltam ao normal e o mapa para de se mexer. */
+function fecharAbertura() {
+  if (!state.abrindo) return;
+  state.abrindo = false;
+  $('.map-wrap')?.classList.remove('abrindo');
 }
 
 function drawResults() {
@@ -522,21 +706,24 @@ function observarMapa() {
 }
 
 function fitToResults() {
-  // Na primeira abertura o mapa parte do mundo inteiro e se aproxima da
-  // origem, para a pessoa entender de onde a busca está saindo.
+  // Na primeira abertura o mapa parte do mundo inteiro e MERGULHA em cima de
+  // quem está olhando. Daí em diante ele só abre: os aeroportos de saída
+  // puxam o enquadramento para trás, e depois cada ligação da teia puxa mais
+  // um pouco. A pessoa vê a malha crescendo a partir de casa, em vez de
+  // receber o mapa da Europa pronto com cem preços em cima.
   if (state.intro) {
     const destino = [state.origin.lat, state.origin.lon];
     map.setView([20, 0], 2, { animate:false });
 
     // Tempo total da abertura abaixo de 2 s: 0,3 s parado no mundo + 1,5 s de voo.
     setTimeout(() => {
-      map.flyTo(destino, 5, { duration:1.5, easeLinearity:.3 });
+      map.flyTo(destino, 8, { duration:1.5, easeLinearity:.3 });
 
       // O flyTo do Leaflet roda em requestAnimationFrame, que fica congelado
       // quando a aba está em segundo plano — a animação não sairia do lugar.
       // Se ela não tiver andado, colocamos o mapa no destino sem animar.
       setTimeout(() => {
-        if (Math.abs(map.getZoom() - 5) > 0.4) map.setView(destino, 5, { animate:false });
+        if (Math.abs(map.getZoom() - 8) > 0.4) map.setView(destino, 8, { animate:false });
         // 0,3 s + 1,6 s = 1,9 s no pior caso, quando este atalho é quem
         // conclui a abertura. Com a animação rodando, termina em 1,8 s.
         state.intro = false;
@@ -582,6 +769,7 @@ function search({ refit = true } = {}) {
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
 let faresAbort;
 let faresPedido;
+let primeiraAbertura = true;   // a abertura animada é só na primeira carga
 
 /**
  * Pede a busca de preços reais, juntando chamadas próximas numa só.
@@ -608,6 +796,7 @@ let pausaTimer;
 function acompanharPausa() {
   clearInterval(pausaTimer);
   if (!RYA.estaBloqueado()) return;
+  fecharAbertura();
   setFareStatus('pausa');
   pausaTimer = setInterval(() => {
     if (RYA.estaBloqueado()) return setFareStatus('pausa');
@@ -638,6 +827,14 @@ async function loadRealFares() {
 
   setFareStatus('loading');
   limparTeia();
+  state.varreduraPronta = false;
+  if (primeiraAbertura) {
+    primeiraAbertura = false;
+    state.abrindo = true;
+    $('.map-wrap')?.classList.add('abrindo');
+    // Rede de segurança: se a varredura travar, a abertura não fica eterna.
+    setTimeout(fecharAbertura, 45e3);
+  }
   try {
     const airports = await RYA.loadAirports();
     if (signal.aborted) return;
@@ -652,7 +849,12 @@ async function loadRealFares() {
     const saidas = RYA.nearestAirports(airports, state.origin, 260, 5);
     state.originAirports = saidas;
     state.originAirport = saidas[0] || null;
-    if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
+    if (!saidas.length) {
+      state.realFares = new Map();
+      fecharAbertura();
+      return setFareStatus('uncovered');
+    }
+    if (state.abrindo) mostrarSaidas(saidas);
 
     const porIata = new Map(airports.map(a => [a.iata, a]));
 
@@ -786,8 +988,10 @@ async function loadRealFares() {
     // todo voo direto já na tela, porque é a parte mais cara.
     if (RYA.estaBloqueado()) return acompanharPausa();
     await varrerEscalas(saidas, porIata, destinoDoAeroporto, signal);
+    state.varreduraPronta = true;
   } catch {
     if (signal.aborted) return;
+    fecharAbertura();
     if (RYA.estaBloqueado()) acompanharPausa(); else setFareStatus('none');
   }
 }
