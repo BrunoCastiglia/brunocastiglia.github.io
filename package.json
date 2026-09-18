@@ -6,8 +6,11 @@
   "description": "Diga quanto você tem e veja no mapa para onde dá para ir, com preço real de voo quando existe.",
   "scripts": {
     "dev": "node serve.mjs",
-    "start": "node serve.mjs"
+    "start": "node serve.mjs",
+    "bump": "node bump.mjs"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "SEE LICENSE IN LICENSE"
 }

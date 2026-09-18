@@ -2,17 +2,17 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js';
-import { searchLocal, searchRemote, norm } from './data/origins.js';
-import * as GEO from './data/geo.js';
-import { ligadosPorTerra } from './data/landmass.js';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js';
-import * as FX from './fx.js';
-import * as P from './providers/index.js';
-import { bookingLinks } from './links.js';
-import * as RYA from './providers/ryanair.js';
-import * as OSM from './providers/osm-stays.js';
-import { mountAllAds } from './ads.js';
+import { DESTINATIONS } from './data/destinations.js?v=41';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=41';
+import * as GEO from './data/geo.js?v=41';
+import { ligadosPorTerra } from './data/landmass.js?v=41';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=41';
+import * as FX from './fx.js?v=41';
+import * as P from './providers/index.js?v=41';
+import { bookingLinks } from './links.js?v=41';
+import * as RYA from './providers/ryanair.js?v=41';
+import * as OSM from './providers/osm-stays.js?v=41';
+import { mountAllAds } from './ads.js?v=41';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
