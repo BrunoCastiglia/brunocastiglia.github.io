@@ -2,17 +2,17 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=43';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=43';
-import * as GEO from './data/geo.js?v=43';
-import { ligadosPorTerra } from './data/landmass.js?v=43';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=43';
-import * as FX from './fx.js?v=43';
-import * as P from './providers/index.js?v=43';
-import { bookingLinks } from './links.js?v=43';
-import * as RYA from './providers/ryanair.js?v=43';
-import * as OSM from './providers/osm-stays.js?v=43';
-import { mountAllAds } from './ads.js?v=43';
+import { DESTINATIONS } from './data/destinations.js?v=44';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=44';
+import * as GEO from './data/geo.js?v=44';
+import { ligadosPorTerra } from './data/landmass.js?v=44';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=44';
+import * as FX from './fx.js?v=44';
+import * as P from './providers/index.js?v=44';
+import { bookingLinks } from './links.js?v=44';
+import * as RYA from './providers/ryanair.js?v=44';
+import * as OSM from './providers/osm-stays.js?v=44';
+import { mountAllAds } from './ads.js?v=44';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -454,7 +454,7 @@ function drenarTeia() {
   if (!filaTeia.length) {
     clearInterval(teiaTimer);
     teiaTimer = null;
-    fecharAbertura();
+    assentarTela();
     return;
   }
 
@@ -609,32 +609,35 @@ function mostrarSaidas(saidas) {
 }
 
 /** Fim da abertura: os preços voltam ao normal e o mapa para de se mexer. */
-function fecharAbertura() {
+function varreduraAcabou() {
+  state.varreduraPronta = true;
+  clearTimeout(desistirTimer);
+  assentarTela();
+}
+
+/**
+ * Acerta a tela quando não há mais nada por vir: os preços voltam ao normal e
+ * a teia apaga, um segundo depois da última linha.
+ *
+ * Duas coisas precisam ter acabado, e elas acabam fora de ordem — a varredura,
+ * que descobre as ligações, e a fila de desenho, que as acende. Quem chegar
+ * por último é quem encerra, e é por isso que a checagem mora aqui e é chamada
+ * das duas pontas.
+ *
+ * A condição da varredura não é firula: a fila esvazia por instantes entre um
+ * lote e outro, e sem ela o primeiro respiro entre lotes encerrava a abertura.
+ * O mapa parava de acompanhar a teia no segundo quadro e ficava preso em cima
+ * de casa, com a malha inteira desenhada fora da tela.
+ *
+ * As linhas continuam na camada: mudar de mês refaz a busca e a teia volta.
+ */
+function assentarTela() {
+  if (!state.varreduraPronta || filaTeia.length) return;
+
   if (state.abrindo) {
     state.abrindo = false;
     $('.map-wrap')?.classList.remove('abrindo');
   }
-  talvezApagarTeia();
-}
-
-/**
- * Apaga a teia quando a busca acaba de verdade.
- *
- * Ela existe para mostrar a varredura acontecendo — de onde se sai, até onde
- * se chega, anel por anel. Terminada a busca, vira risco atravessado por cima
- * dos preços, que é o que a pessoa veio ler. Some com calma, um segundo depois
- * da última linha, e o mapa volta a ser o mapa.
- *
- * Duas coisas precisam ter acabado, e elas acabam fora de ordem: a varredura
- * (que descobre as ligações) e a fila de desenho (que as acende). Por isso a
- * checagem mora aqui e é chamada das duas pontas — quem chegar por último é
- * quem apaga. Antes, a fila esvaziar primeiro encerrava o temporizador e a
- * teia ficava na tela para sempre.
- *
- * As linhas continuam na camada: mudar de mês refaz a busca e a teia volta.
- */
-function talvezApagarTeia() {
-  if (!state.varreduraPronta || filaTeia.length) return;
   clearTimeout(apagarTimer);
   apagarTimer = setTimeout(() => $('.map-wrap')?.classList.add('teia-off'), 1000);
 }
@@ -824,7 +827,7 @@ let pausaTimer;
 function acompanharPausa() {
   clearInterval(pausaTimer);
   if (!RYA.estaBloqueado()) return;
-  fecharAbertura();
+  varreduraAcabou();          // em pausa, não vem mais nada por ora
   setFareStatus('pausa');
   pausaTimer = setInterval(() => {
     if (RYA.estaBloqueado()) return setFareStatus('pausa');
@@ -867,10 +870,7 @@ async function loadRealFares() {
   // recuados e a teia por cima deles, para sempre. Passado um minuto, a tela
   // se acerta com o que tiver.
   clearTimeout(desistirTimer);
-  desistirTimer = setTimeout(() => {
-    state.varreduraPronta = true;
-    fecharAbertura();
-  }, 60e3);
+  desistirTimer = setTimeout(varreduraAcabou, 60e3);
   try {
     const airports = await RYA.loadAirports();
     if (signal.aborted) return;
@@ -887,7 +887,7 @@ async function loadRealFares() {
     state.originAirport = saidas[0] || null;
     if (!saidas.length) {
       state.realFares = new Map();
-      fecharAbertura();
+      varreduraAcabou();          // sem aeroporto perto, não há teia a desenhar
       return setFareStatus('uncovered');
     }
     if (state.abrindo) mostrarSaidas(saidas);
@@ -1024,14 +1024,11 @@ async function loadRealFares() {
     // todo voo direto já na tela, porque é a parte mais cara.
     if (RYA.estaBloqueado()) return acompanharPausa();
     await varrerMalha(saidas, porIata, destinoDoAeroporto, signal);
-    state.varreduraPronta = true;
-    clearTimeout(desistirTimer);
-    if (signal.aborted) return;
-    setFareStatus(acumulado.size ? 'ok' : 'none');
-    fecharAbertura();
+    varreduraAcabou();
+    if (!signal.aborted) setFareStatus(acumulado.size ? 'ok' : 'none');
   } catch {
     if (signal.aborted) return;
-    fecharAbertura();
+    varreduraAcabou();
     if (RYA.estaBloqueado()) acompanharPausa(); else setFareStatus('none');
   }
 }
