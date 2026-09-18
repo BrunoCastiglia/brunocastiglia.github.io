@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=60';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=60';
-import * as GEO from './data/geo.js?v=60';
-import { ligadosPorTerra } from './data/landmass.js?v=60';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=60';
-import * as FX from './fx.js?v=60';
-import * as P from './providers/index.js?v=60';
-import { bookingLinks } from './links.js?v=60';
-import * as RYA from './providers/ryanair.js?v=60';
-import * as OSM from './providers/osm-stays.js?v=60';
-import * as TP from './providers/travelpayouts.js?v=60';
-import { mountAllAds } from './ads.js?v=60';
+import { DESTINATIONS } from './data/destinations.js?v=64';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=64';
+import * as GEO from './data/geo.js?v=64';
+import { ligadosPorTerra } from './data/landmass.js?v=64';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=64';
+import * as FX from './fx.js?v=64';
+import * as P from './providers/index.js?v=64';
+import { bookingLinks } from './links.js?v=64';
+import * as RYA from './providers/ryanair.js?v=64';
+import * as OSM from './providers/osm-stays.js?v=64';
+import * as TP from './providers/travelpayouts.js?v=64';
+import { mountAllAds } from './ads.js?v=64';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1992,6 +1992,15 @@ async function prepararBuscaDeCaminhos(r) {
     return;
   }
 
+  // Tarifa vista que parte de outro aeroporto: a viagem tem duas reservas e as
+  // duas precisam estar na tela, em ordem e com hora. É o caminho principal
+  // para esse destino, então vem antes de procurar alternativas.
+  if (r.visto?.trecho) {
+    conexaoAbort?.abort();
+    conexaoAbort = new AbortController();
+    if (await montarTrajetoriaVista(r, conexaoAbort.signal)) return;
+  }
+
   const achou = await tentarVooDireto(r);
   if (achou || state.selected !== r.dest.id) return;   // já virou preço confirmado
 
@@ -2236,6 +2245,132 @@ function mostrarDiretoDeLonge(d, destApt, r) {
 /* ---------------------------------------------- caminhos alternativos ---- */
 
 /** Uma perna de voo, clicável, com horários e preço. */
+/**
+ * A trajetória completa até um destino cuja tarifa saiu de outro aeroporto.
+ *
+ * O painel dizia tudo numa frase corrida — "€ 423 partindo de Paris, aonde você
+ * chega com o voo CAG → BVA por € 216, já somado" — e quem lia tinha de montar
+ * a viagem de cabeça. Pior: o voo até o hub era o mais barato do MÊS, sem
+ * relação com o dia em que o voo longo parte. Podia chegar a Paris depois de o
+ * avião para Santiago ter saído.
+ *
+ * Aqui os dois trechos aparecem em ordem, com hora, e o primeiro é procurado
+ * com a data presa: tem de pousar no hub ANTES de o voo longo decolar, e a
+ * volta só parte depois de ele voltar.
+ */
+async function montarTrajetoriaVista(r, signal) {
+  const caixa = $('#conexaoBox');
+  const v = r.visto;
+  if (!caixa || !v?.trecho) return false;
+
+  const { saida, chegada } = v.trecho;
+  caixa.hidden = false;
+  caixa.classList.remove('conexao-direta', 'duas-opcoes');
+  caixa.innerHTML = '<span class="conexao-load">montando a viagem inteira…</span>';
+
+  /* Janelas presas às datas do voo longo, nas duas pontas.
+
+     A ida tem de POUSAR antes de ele partir — dormir no aeroporto é ruim,
+     chegar depois de o avião sair é pior, e a pessoa vê a hora e decide.
+
+     A volta precisa de teto, e era o que faltava: sem ele a busca pegava o voo
+     mais barato dali para a frente e devolvia um retorno a Roma onze dias
+     depois de a pessoa já estar lá. Dois dias de folga bastam. */
+  const maisDias = (dia, n) =>
+    new Date(new Date(dia + 'T00:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 19);
+
+  /* A ida também precisa de PISO, e não só de teto. Sem ele a busca escolhia o
+     voo mais barato de todo o mês que ainda coubesse antes do prazo — e
+     devolvia uma chegada a Roma cinco dias antes, com 99 h de espera. O dia
+     anterior mais o próprio dia é a janela que faz sentido. */
+  const [ida, volta] = await Promise.all([
+    RYA.legFare(saida.iata, chegada.iata, state.month, state.days, signal,
+      maisDias(v.ida, -1), `${v.ida}T23:59:00`),
+    RYA.legFare(chegada.iata, saida.iata, state.month, state.days, signal,
+      `${v.volta}T00:00:00`, maisDias(v.volta, 2)),
+  ]);
+
+  /* A companhia não vende para os próximos dias. Quando a tarifa vista é para
+     depressa demais, dizer "não achamos voo" é impreciso e joga a culpa no
+     lugar errado — o voo existe, o que não dá é comprar o trecho a tempo. */
+  const cedoDemais = new Date(v.ida) < new Date(Date.now() + 3 * 864e5);
+  if (signal?.aborted || state.selected !== r.dest.id) return true;
+
+  const href = TP.linkDaOferta(v);
+  const total = (ida?.price || 0) + (volta?.price || 0) + v.p;
+
+  /* O resumo lá em cima foi calculado com a perna genérica do mês; aqui temos
+     a real, presa às datas do voo longo. Corrigir o resumo com ela evita o
+     desencontro de o cabeçalho dizer € 191 e a trajetória logo abaixo dizer
+     € 211 — dois números para a mesma viagem na mesma tela. */
+  if (ida && volta) {
+    const guardada = state.vistos.get(r.dest.id);
+    if (guardada && guardada.total !== total) {
+      state.vistos.set(r.dest.id, {
+        ...guardada,
+        total,
+        trecho: { ...guardada.trecho, price: ida.price + volta.price, exato: true },
+      });
+      search({ refit:false });
+    }
+  }
+
+  // A folga entre pousar no hub e decolar dele. É o número que decide se a
+  // viagem é possível, então aparece com destaque e não escondido numa frase.
+  const folga = ida?.arrive
+    ? Math.round((new Date(`${v.ida}T00:00:00`) - new Date(ida.arrive)) / 36e5)
+    : null;
+
+  caixa.innerHTML = `
+    <div class="conexao-head">
+      <span class="conexao-tag">trajetória completa</span>
+      <b>${fmt(total)}</b>
+      <small>${esc(saida.iata)} → ${esc(chegada.iata)} → ${esc(v.apt || r.dest.city)} · ${v.n} noites</small>
+    </div>
+
+    <p class="conexao-nota">
+      <b>1.</b> Primeiro, chegar a ${esc(v.hub.city)}. Este é o voo da companhia que
+      consultamos ao vivo — preço confirmado agora:
+    </p>
+    ${ida ? pernaVoo(ida, 'ida', r.people)
+          : cedoDemais
+            ? `<p class="conexao-nota">Esta tarifa é para <b>${fmtDate(v.ida)}</b>, perto
+               demais para ainda comprar o trecho até ${esc(v.hub.city)} — a companhia não
+               vende para os próximos dias. Escolha um mês mais à frente e o caminho
+               inteiro aparece.</p>`
+            : `<p class="conexao-nota">Não achamos voo pousando em ${esc(v.hub.city)} a tempo
+               de pegar o de ${esc(r.dest.city)} em ${fmtDate(v.ida)}. A rota existe no mês,
+               mas não nesse dia.</p>`}
+
+    <p class="conexao-nota">
+      <b>2.</b> De ${esc(v.hub.city)} para ${esc(r.dest.city)}, ${fmtDate(v.ida)} → ${fmtDate(v.volta)},
+      ${v.esc ? `${v.esc} escala${v.esc > 1 ? 's' : ''}` : 'direto'}:
+    </p>
+    <div class="perna perna-vista">
+      <span class="perna-rota"><b>${esc(chegada.iata)}</b> → <b>${esc(v.apt || '')}</b>
+        <i class="perna-voo">${esc(String(v.cia || ''))}${esc(String(v.voo || ''))}</i></span>
+      <span class="perna-data">ida e volta · ${fmtDate(v.ida)} → ${fmtDate(v.volta)}</span>
+      <span class="perna-preco">${fmt(v.p)}</span>
+    </div>
+
+    ${volta ? `<p class="conexao-nota"><b>3.</b> E o retorno para casa, depois de
+                 ${esc(r.dest.city)} devolver você a ${esc(v.hub.city)}:</p>
+               ${pernaVoo(volta, 'volta', r.people)}` : ''}
+
+    <p class="conexao-nota">
+      ${folga !== null && folga >= 0
+        ? `Você pousa em ${esc(v.hub.city)} <b>${folga} h antes</b> de o voo seguir${
+            folga > 20 ? ' — conte uma noite na cidade' : ''}.`
+        : ''}
+      O segundo trecho é <b>preço visto</b>, não cotação: alguém encontrou esse valor
+      nos últimos dias e não confirmamos que ainda existe.
+      ${href ? `<a class="visto-link" href="${href}" target="_blank" rel="noopener nofollow">
+                  conferir no Aviasales →</a>` : ''}
+      <br>São <b>reservas separadas</b>: um atraso no primeiro trecho não é coberto pelo segundo.
+    </p>`;
+  return true;
+}
+
 function pernaVoo(p, rotulo, people) {
   if (!p) return '';
   return `

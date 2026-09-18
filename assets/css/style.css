@@ -980,6 +980,8 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .pin.pin-visto{box-shadow:0 0 0 1.5px var(--visto-borda), 0 3px 10px rgba(0,0,0,.5)}
 .dot-visto{color:var(--visto);background:none;font-size:10px;line-height:1}
 .tip-visto{color:var(--visto)}
+.perna-vista{border-left:2px solid var(--visto);padding-left:8px}
+.perna-vista .perna-preco{color:var(--visto)}
 .visto-link{
   display:inline-block;margin-top:6px;font-weight:700;font-size:12px;
   color:var(--visto);text-decoration:none;
