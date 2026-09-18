@@ -1,6 +1,6 @@
 {
- "atualizado": "2026-09-18T13:11:01.556Z",
- "marker": "",
+ "atualizado": "2026-09-18T13:32:08.983Z",
+ "marker": "779053",
  "meses": [
   "2026-09",
   "2026-10",
@@ -15,7 +15,7 @@
    "city": "São Paulo",
    "lat": -23.43,
    "lon": -46.47,
-   "ofertas": 354
+   "ofertas": 353
   },
   {
    "iata": "GIG",
@@ -85,7 +85,7 @@
    "city": "Manaus",
    "lat": -3.04,
    "lon": -60.05,
-   "ofertas": 22
+   "ofertas": 23
   },
   {
    "iata": "VCP",
@@ -148,7 +148,7 @@
    "city": "Bogotá",
    "lat": 4.7,
    "lon": -74.15,
-   "ofertas": 142
+   "ofertas": 143
   },
   {
    "iata": "MVD",
@@ -176,28 +176,28 @@
    "city": "Porto",
    "lat": 41.24,
    "lon": -8.68,
-   "ofertas": 263
+   "ofertas": 264
   },
   {
    "iata": "MAD",
    "city": "Madri",
    "lat": 40.49,
    "lon": -3.57,
-   "ofertas": 606
+   "ofertas": 605
   },
   {
    "iata": "BCN",
    "city": "Barcelona",
    "lat": 41.3,
    "lon": 2.08,
-   "ofertas": 604
+   "ofertas": 601
   },
   {
    "iata": "CDG",
    "city": "Paris",
    "lat": 49.01,
    "lon": 2.55,
-   "ofertas": 652
+   "ofertas": 651
   },
   {
    "iata": "LON",
@@ -211,14 +211,14 @@
    "city": "Roma",
    "lat": 41.8,
    "lon": 12.25,
-   "ofertas": 562
+   "ofertas": 563
   },
   {
    "iata": "MIL",
    "city": "Milão",
    "lat": 45.63,
    "lon": 8.72,
-   "ofertas": 620
+   "ofertas": 623
   },
   {
    "iata": "FRA",
@@ -246,28 +246,28 @@
    "city": "Zurique",
    "lat": 47.46,
    "lon": 8.55,
-   "ofertas": 346
+   "ofertas": 347
   },
   {
    "iata": "VIE",
    "city": "Viena",
    "lat": 48.11,
    "lon": 16.57,
-   "ofertas": 486
+   "ofertas": 484
   },
   {
    "iata": "DUB",
    "city": "Dublin",
    "lat": 53.43,
    "lon": -6.25,
-   "ofertas": 322
+   "ofertas": 323
   },
   {
    "iata": "NYC",
    "city": "Nova York",
    "lat": 40.64,
    "lon": -73.78,
-   "ofertas": 405
+   "ofertas": 406
   },
   {
    "iata": "MIA",
