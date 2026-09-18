@@ -205,7 +205,11 @@ async function tarifasDoMes(origem, mes) {
       esc: f.transfers ?? null,               // escalas na ida
       escv: f.return_transfers ?? null,
       min: f.duration ?? null,                // ida e volta, em minutos
-      url: f.link || null,                    // caminho; o marker entra no site
+      // Só o caminho, sem a quilometragem de parâmetros assinados que vem
+      // depois do "?". Aquilo é 75% do arquivo — 313 KB viram 78 —, e o site
+      // precisa carregar VÁRIOS hubs para comparar. O link continua caindo na
+      // busca certa: rota e datas estão no próprio caminho.
+      url: f.link ? String(f.link).split('?')[0] : null,
     });
   }
 
