@@ -2,17 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=44';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=44';
-import * as GEO from './data/geo.js?v=44';
-import { ligadosPorTerra } from './data/landmass.js?v=44';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=44';
-import * as FX from './fx.js?v=44';
-import * as P from './providers/index.js?v=44';
-import { bookingLinks } from './links.js?v=44';
-import * as RYA from './providers/ryanair.js?v=44';
-import * as OSM from './providers/osm-stays.js?v=44';
-import { mountAllAds } from './ads.js?v=44';
+import { DESTINATIONS } from './data/destinations.js?v=48';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=48';
+import * as GEO from './data/geo.js?v=48';
+import { ligadosPorTerra } from './data/landmass.js?v=48';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=48';
+import * as FX from './fx.js?v=48';
+import * as P from './providers/index.js?v=48';
+import { bookingLinks } from './links.js?v=48';
+import * as RYA from './providers/ryanair.js?v=48';
+import * as OSM from './providers/osm-stays.js?v=48';
+import * as TP from './providers/travelpayouts.js?v=48';
+import { mountAllAds } from './ads.js?v=48';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -54,6 +55,8 @@ const state = {
   abrindo: false,         // a teia está se desenhando e o mapa a acompanha
   mapaDaPessoa: false,    // ela mexeu no mapa: paramos de enquadrar sozinhos
   realFares: new Map(),   // id do destino -> tarifa real da Ryanair
+  vistos: new Map(),      // id do destino -> tarifa vista no Aviasales (arquivo do dia)
+  vistosDe: null,         // de qual aeroporto colhido elas vieram
   originAirport: null,    // aeroporto Ryanair mais próximo da origem
   originAirports: [],     // até 3 aeroportos de partida, por distância
   enquadrePontos: null,   // trajeto do último enquadramento, para repeti-lo
@@ -652,13 +655,20 @@ function drawResults() {
     // estrela dourada = o voo deste destino tem preço real, não estimativa
     // estrela cheia: preço confirmado. contorno: tem voo direto, preço ainda
     // não consultado (abre o destino e ele é buscado)
+    // Três marcas para três certezas diferentes. O losango é o preço VISTO:
+    // veio de uma busca real de alguém nos últimos dias, com companhia e
+    // número de voo, mas ninguém confirmou que ainda está lá. Dar a ele a
+    // mesma estrela da tarifa consultada agora seria repetir o erro da estrela
+    // vazia, que prometia o que não podia cumprir.
     const estrela = r.real && !r.useGround ? '<i class="pin-star">★</i>'
-      : (r.voaDireto && !r.useGround ? '<i class="pin-star pin-star-vazia">☆</i>' : '');
+      : (r.voaDireto && !r.useGround ? '<i class="pin-star pin-star-vazia">☆</i>'
+      : (r.visto && !r.useGround ? '<i class="pin-visto-marca">◆</i>' : ''));
     const label = over ? '' : estrela + esc(fmt(r.total, { compact:true }));
     const cls = `pin pin-${r.verdict}`
       + (over ? ' pin-dot' : '')
       + (r.real && !over ? ' pin-real' : '')
-      + (!r.real && r.voaDireto && !over ? ' pin-direto' : '');
+      + (!r.real && r.voaDireto && !over ? ' pin-direto' : '')
+      + (!r.real && !r.voaDireto && r.visto && !over ? ' pin-visto' : '');
     const m = L.marker([r.dest.lat, r.dest.lon], {
       icon: pinIcon(label, cls),
       zIndexOffset: over ? 0 : r.real ? 800 : r.verdict === 'fit' ? 600 : 300,
@@ -671,7 +681,10 @@ function drawResults() {
          ? `<br><span class="tip-real">★ voo com preço real: ${fmt(r.real.price)}</span>`
          : r.voaDireto && !r.useGround
            ? '<br><span class="tip-direto">☆ tem voo direto — abra para ver o preço</span>'
-           : '<br><span class="tip-est">valor estimado</span>'}`,
+           : r.visto && !r.useGround
+             ? `<br><span class="tip-visto">◆ ${fmt(r.visto.p)} visto há pouco —
+                 ${r.visto.n} noites, não é cotação</span>`
+             : '<br><span class="tip-est">valor estimado</span>'}`,
       { direction:'top', offset:[0,-14], className:'dest-tip' },
     );
     m.on('click', () => select(r.dest.id, { fly:false }));
@@ -779,7 +792,7 @@ function search({ refit = true } = {}) {
     state.results = rankDestinations(state.origin, DESTINATIONS, {
       days: state.days, people: state.people, month: state.month, style: state.style,
       mode: state.mode, budgetEUR: budgetEUR(),
-      sortBy: state.sortBy, realFares: state.realFares,
+      sortBy: state.sortBy, realFares: state.realFares, vistos: state.vistos,
       filtro: state.filtro, viaEscala: state.viaEscala, bounds: areaVisivel(),
       temVooDireto: state.temVooDireto,
       manterId: state.selected,
@@ -794,6 +807,37 @@ function search({ refit = true } = {}) {
 
     $('#mapLoading').hidden = true;
   }, 0);
+}
+
+/**
+ * Tarifas vistas no Aviasales, lidas do arquivo que a Action colhe todo dia.
+ *
+ * Roda antes da Ryanair de propósito: é leitura de arquivo local, então o mapa
+ * já sai do zero com preço de verdade enquanto a consulta ao vivo acontece. E
+ * onde a Ryanair não chega — Brasil, América do Sul, África — esta é a única
+ * camada que existe; antes dela ali só havia estimativa.
+ *
+ * Falha em silêncio: sem o arquivo, o site é exatamente o que era antes.
+ */
+async function carregarVistos() {
+  state.vistos = new Map();
+  state.vistosDe = null;
+  try {
+    const r = await TP.tarifasVistas(state.origin, state.month, state.days);
+    if (!r?.tarifas?.size) return;
+    state.vistos = r.tarifas;
+    state.vistosDe = r;
+
+    // Estas ligações também são voos, então entram na teia. Não é enfeite: sem
+    // elas, quem sai do Brasil via o mapa mergulhar na própria cidade e ficar
+    // lá, porque nada mais reenquadrava — a teia é o que puxa o zoom para trás.
+    const porId = new Map(DESTINATIONS.map(d => [d.id, d]));
+    for (const id of r.tarifas.keys()) {
+      const d = porId.get(id);
+      if (d) acenderTeia(r.origem, d, 'vista');
+    }
+    search({ refit:false });
+  } catch {/* sem esta camada o site segue igual */}
 }
 
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
@@ -858,6 +902,7 @@ async function loadRealFares() {
 
   setFareStatus('loading');
   limparTeia();
+
   state.varreduraPronta = false;
   if (primeiraAbertura) {
     primeiraAbertura = false;
@@ -872,6 +917,13 @@ async function loadRealFares() {
   clearTimeout(desistirTimer);
   desistirTimer = setTimeout(varreduraAcabou, 60e3);
   try {
+    // Aguardado de propósito, apesar de parecer um atraso: é leitura de arquivo
+    // local, responde em milissegundos, e TUDO abaixo depende de saber se já
+    // temos preço. Solto, o caminho "sem Ryanair por perto" decidia que não
+    // havia nada antes de a resposta chegar, e quem sai do Brasil voltava a ver
+    // o aviso de que não há voo.
+    await carregarVistos();
+
     const airports = await RYA.loadAirports();
     if (signal.aborted) return;
     if (!airports.length) return setFareStatus('none');
@@ -887,8 +939,13 @@ async function loadRealFares() {
     state.originAirport = saidas[0] || null;
     if (!saidas.length) {
       state.realFares = new Map();
-      varreduraAcabou();          // sem aeroporto perto, não há teia a desenhar
-      return setFareStatus('uncovered');
+      // Aqui era o fim da linha: quem sai do Brasil via só estimativa. Agora
+      // a camada de tarifas vistas responde por esses lugares, e é o aeroporto
+      // dela que aparece na abertura — antes de encerrá-la, senão o mapa para
+      // de acompanhar a teia e fica mergulhado na própria cidade.
+      if (state.abrindo && state.vistosDe) mostrarSaidas([state.vistosDe.origem]);
+      varreduraAcabou();
+      return setFareStatus(state.vistos.size ? 'vistos' : 'uncovered');
     }
     if (state.abrindo) mostrarSaidas(saidas);
 
@@ -1176,6 +1233,9 @@ function setFareStatus(kind, progresso = null) {
                   ? `${progresso.saida} (${progresso.ordem} de ${progresso.saidas}) — ` +
                     `lote ${progresso.feitos} de ${progresso.total}`
                   : 'varrendo destinos'],
+    vistos:    [String(state.vistos.size), state.vistosDe
+                  ? `preços vistos saindo de ${state.vistosDe.origem.iata} — sem voo Ryanair aqui`
+                  : 'preços vistos recentemente'],
     ondas:     [String(n), progresso
                   ? `onda ${progresso.nivel} — ${progresso.alcance} aeroportos na teia`
                   : 'abrindo a malha em ondas'],
@@ -1354,6 +1414,18 @@ function textoSemConfirmado(r) {
   if (r.voaDireto) {
     return `A companhia <b>tem a rota direta</b>, mas não encontramos tarifa para este
             período. O valor de ${valor} no resumo é estimativa de planejamento.`;
+  }
+  // O preço visto tem nome, voo e data — dizer isso vale muito mais que
+  // "sem preço confirmado". Mas o que ele NÃO é precisa vir junto, na mesma
+  // frase: ninguém conferiu que ainda está lá.
+  if (r.visto) {
+    const v = r.visto;
+    const quando = v.ida && v.volta ? `${fmtDate(v.ida)} → ${fmtDate(v.volta)}` : '';
+    return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
+            últimos dias — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
+            ${quando}, ${v.n} noites${v.esc ? `, ${v.esc} escala${v.esc > 1 ? 's' : ''}` : ', direto'}.
+            <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.
+            É o melhor que temos aqui, porque a companhia que consultamos ao vivo não voa nesta região.`;
   }
   return `Sem preço confirmado para esta rota. O valor de <b>${valor}</b>
           no resumo é estimativa de planejamento — confira na busca ao lado.`;
@@ -1730,6 +1802,15 @@ async function prepararBuscaDeCaminhos(r) {
   caixa.hidden = false;
   caixa.classList.remove('conexao-direta', 'duas-opcoes');
   caixa.innerHTML = '<span class="conexao-load">conferindo se há voo direto…</span>';
+
+  // Sem aeroporto da companhia por perto não há caminho a procurar: a busca de
+  // trajetos é toda da malha Ryanair. Deixar a caixa girando "procurando
+  // caminhos até aqui" para quem sai de São Paulo é prometer um trabalho que
+  // nunca vai acontecer.
+  if (!state.originAirports.length) {
+    caixa.hidden = true;
+    return;
+  }
 
   const achou = await tentarVooDireto(r);
   if (achou || state.selected !== r.dest.id) return;   // já virou preço confirmado

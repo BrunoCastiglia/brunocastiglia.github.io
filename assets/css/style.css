@@ -54,6 +54,7 @@
 
   /* ---- origem ---- */
   --origin:#2563eb;   --origin-ink:#ffffff;
+  --visto:#4cc9c0;    --visto-borda:rgba(76,201,192,.6);
 
   /* ---- dourado do "preço confirmado" ----
      Dois papéis distintos: --gold-solid é fundo de selo (precisa ser vivo) e
@@ -634,6 +635,8 @@ body.is-resizing .details-body{pointer-events:none}
 .teia-linha{fill:none;stroke-linecap:round;pointer-events:none}
 .teia-direta{stroke:var(--origin);stroke-opacity:.42}
 .teia-escala{stroke:#63a8ff;stroke-opacity:.2;stroke-dasharray:3 6}
+/* as ligações que vêm do arquivo de tarifas vistas, na cor do próprio nível */
+.teia-vista{stroke:var(--visto);stroke-opacity:.3}
 /* Some com um destino aberto, e de vez quando a busca acaba: a teia cumpriu o
    papel de mostrar a varredura acontecendo e passaria a atrapalhar a leitura
    dos preços. Quem apaga é `stroke-opacity`, e não `opacity`: num <path> do
@@ -969,6 +972,14 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 /* tem voo direto, preço ainda não consultado */
 .pin-star-vazia{color:rgba(255,210,74,.85)}
 .pin.pin-direto{box-shadow:0 0 0 1.5px rgba(255,210,74,.55), 0 3px 10px rgba(0,0,0,.5)}
+/* Terceiro nível: preço VISTO numa busca real de alguém nos últimos dias, com
+   companhia e número de voo, mas sem ninguém confirmar que ainda existe. Cor
+   própria, e não um tom de dourado: a distância para a tarifa consultada agora
+   tem de ser visível de relance, não uma nuance. */
+.pin-visto-marca{font-style:normal;font-size:9px;line-height:1;color:var(--visto)}
+.pin.pin-visto{box-shadow:0 0 0 1.5px var(--visto-borda), 0 3px 10px rgba(0,0,0,.5)}
+.dot-visto{color:var(--visto);background:none;font-size:10px;line-height:1}
+.tip-visto{color:var(--visto)}
 .dot-star-vazia{color:rgba(255,210,74,.85)}
 .tip-direto{color:var(--gold);font-size:11px;opacity:.9}
 

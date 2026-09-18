@@ -118,11 +118,16 @@ export function tripCost(origin, dest, opts) {
   const season = seasonFactor(dest.region, month);
   const staySeason = 1 + (season - 1) * 0.6;   // hospedagem oscila menos que o voo
 
-  // Tarifa real (Ryanair) quando existe para este destino; senão, estimativa.
+  // Três degraus, nesta ordem, e a tela precisa distinguir os três:
+  //  1. `real`  — Ryanair, consultada agora, com link de compra;
+  //  2. `visto` — tarifa que alguém viu no Aviasales nos últimos dias, com
+  //     companhia, voo e datas, mas sem ninguém confirmar que ainda existe;
+  //  3. estimativa — a nossa conta, quando não há nem uma nem outra.
   const real = realFares?.get(dest.id) || null;
+  const visto = !real && (opts.vistos?.get(dest.id) || null);
   const viaEscala = !real && (opts.viaEscala?.get(dest.id) || null);
   const estimated = flightPriceEUR(km, dest, month, style, origin);
-  const airPP = real ? real.price : estimated;
+  const airPP = real ? real.price : visto ? visto.p : estimated;
   const ground = groundPriceEUR(km);
   const useGround = ground !== null && ground < airPP;
 
@@ -141,7 +146,7 @@ export function tripCost(origin, dest, opts) {
     dest, km, nights, days, people, style, month,
     hours: flightHours(km), stops: flightStops(km),
     season, useGround, airPP, groundPP: ground,
-    real, viaEscala, estimatedAirPP: estimated,
+    real, visto, viaEscala, estimatedAirPP: estimated,
     voaDireto: !!(real || opts.temVooDireto?.has(dest.id)),
     flight, stay, total, left, verdict, mode: opts.mode || 'both',
     perDay: Math.round(total / days),
