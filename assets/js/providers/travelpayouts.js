@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=50';
-import { ligadosPorTerra } from '../data/landmass.js?v=50';
+import { distanceKm } from '../engine.js?v=51';
+import { ligadosPorTerra } from '../data/landmass.js?v=51';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -74,13 +74,20 @@ export async function origemMaisProxima(ponto) {
   const perto = indice.origens
     .map(o => ({ ...o, km: Math.round(distanceKm(ponto, o)) }))
     .filter(o => o.km <= RAIO_KM)
-    // Só o que se alcança por terra. Quem está em Olbia não "sai de Roma":
-    // são 270 km com o mar Tirreno no meio, e oferecer tarifa de lá é a mesma
-    // promessa falsa da estrela vazia, agora com um ferry escondido dentro.
-    .filter(o => ligadosPorTerra(ponto, o))
     .sort((a, b) => a.km - b.km);
 
-  return perto[0] || null;
+  if (!perto.length) return null;
+
+  /* Primeiro o que se alcança de carro ou ônibus: quem está em Olbia não "sai
+     de Roma" como quem sai de casa — são 270 km com o mar Tirreno no meio.
+     Mas cortar a ilha inteira foi longe demais na direção oposta: para ir ao
+     Rio, sair de Roma É a resposta realista, e recusá-la deixava a pessoa sem
+     resposta nenhuma. Então o de fora do continente entra, marcado — e a tela
+     diz de onde o voo parte, para o trajeto até lá não virar surpresa. */
+  const porTerra = perto.find(o => ligadosPorTerra(ponto, o));
+  return porTerra
+    ? { ...porTerra, porTerra: true }
+    : { ...perto[0], porTerra: false };
 }
 
 /** O arquivo de uma origem, baixado uma vez por sessão. */

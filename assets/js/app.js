@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=50';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=50';
-import * as GEO from './data/geo.js?v=50';
-import { ligadosPorTerra } from './data/landmass.js?v=50';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=50';
-import * as FX from './fx.js?v=50';
-import * as P from './providers/index.js?v=50';
-import { bookingLinks } from './links.js?v=50';
-import * as RYA from './providers/ryanair.js?v=50';
-import * as OSM from './providers/osm-stays.js?v=50';
-import * as TP from './providers/travelpayouts.js?v=50';
-import { mountAllAds } from './ads.js?v=50';
+import { DESTINATIONS } from './data/destinations.js?v=51';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=51';
+import * as GEO from './data/geo.js?v=51';
+import { ligadosPorTerra } from './data/landmass.js?v=51';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=51';
+import * as FX from './fx.js?v=51';
+import * as P from './providers/index.js?v=51';
+import { bookingLinks } from './links.js?v=51';
+import * as RYA from './providers/ryanair.js?v=51';
+import * as OSM from './providers/osm-stays.js?v=51';
+import * as TP from './providers/travelpayouts.js?v=51';
+import { mountAllAds } from './ads.js?v=51';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1428,11 +1428,18 @@ function textoSemConfirmado(r) {
   if (r.visto) {
     const v = r.visto;
     const quando = v.ida && v.volta ? `${fmtDate(v.ida)} → ${fmtDate(v.volta)}` : '';
+    const de = state.vistosDe?.origem;
+    const saindo = de
+      ? ` <b>partindo de ${esc(de.city)} (${esc(de.iata)})</b>`
+        + (de.porTerra === false
+            ? `, que fica a ${de.km} km <b>e não se chega por terra daqui</b> — o
+               trajeto até lá é por sua conta`
+            : de.km > 60 ? `, a ${de.km} km de você` : '')
+      : '';
     return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
-            últimos dias — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
+            últimos dias${saindo} — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
             ${quando}, ${v.n} noites${v.esc ? `, ${v.esc} escala${v.esc > 1 ? 's' : ''}` : ', direto'}.
-            <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.
-            É o melhor que temos aqui, porque a companhia que consultamos ao vivo não voa nesta região.`;
+            <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.`;
   }
   return `Sem preço confirmado para esta rota. O valor de <b>${valor}</b>
           no resumo é estimativa de planejamento — confira na busca ao lado.`;
@@ -1898,11 +1905,24 @@ async function buscarConexao(r) {
   const signal = conexaoAbort.signal;
   const alvo = r.dest.id;
 
+  /* Sair daqui deixando a caixa como está é o que fazia "procurando caminhos
+     até aqui…" girar para sempre. O Rio não tem aeroporto da companhia num
+     raio de 130 km — e nunca vai ter, porque ela não voa para a América do
+     Sul. Dizer isso é mais útil que uma reticência eterna. */
+  const desistir = motivo => {
+    const cx = $('#conexaoBox');
+    if (!cx || state.selected !== alvo) return;
+    cx.hidden = false;
+    cx.classList.remove('conexao-direta', 'duas-opcoes');
+    cx.innerHTML = `<span class="conexao-load">${motivo}</span>`;
+  };
+
   const saidas = state.originAirports;
-  if (!saidas.length || !state.airports.length) return;
+  if (!saidas.length || !state.airports.length) return desistir('sem malha para procurar caminhos daqui');
 
   const destApt = RYA.nearestAirport(state.airports, r.dest, 130);
-  if (!destApt) return;
+  if (!destApt) return desistir(
+    'a companhia que consultamos ao vivo não voa para esta região — use a busca ao lado');
 
   // se a rede já disse por onde dá para chegar, começa por essa saída
   const sugerida = r.viaEscala?.saida;
@@ -1910,7 +1930,7 @@ async function buscarConexao(r) {
     ? [sugerida, ...saidas.filter(s => s.iata !== sugerida.iata)]
     : saidas;
   const apt = ordem.find(s => s.iata !== destApt.iata);
-  if (!apt) return;
+  if (!apt) return desistir('o aeroporto daqui é o próprio destino');
 
   const caixa = $('#conexaoBox');
   if (caixa) {
