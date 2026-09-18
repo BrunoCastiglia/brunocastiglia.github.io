@@ -17,8 +17,8 @@
      é silenciosa e o site volta sozinho para a estimativa.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=42';
-import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=42';
+import { distanceKm } from '../engine.js?v=43';
+import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=43';
 
 const AIRPORTS_URL = 'https://www.ryanair.com/api/views/locate/5/airports/en/active';
 const FARES_URL    = 'https://services-api.ryanair.com/farfnd/v4/roundTripFares';
@@ -137,13 +137,30 @@ function liberarVaga() {
  */
 async function comRetentativa(url, opts) {
   try {
-    return await fetch(url, opts);
+    return await fetch(url, comPrazo(opts));
   } catch (err) {
     if (foiCancelado(err) || estaBloqueado()) throw err;
     await new Promise(r => setTimeout(r, 900));
     if (opts.signal?.aborted) throw err;
-    return fetch(url, opts);
+    return fetch(url, comPrazo(opts));
   }
+}
+
+/* Prazo de vinte segundos para cada pedido.
+   `fetch` não tem prazo nenhum: uma conexão que fica pendurada não resolve nem
+   rejeita, nunca. E como a fila só libera vaga quando um pedido TERMINA, dois
+   soquetes presos param a varredura inteira — a teia ficava pela metade, o
+   aviso congelado no meio da frase e o mapa sem apagar. Localmente isso nunca
+   acontece, porque a resposta vem na hora; no site publicado, aconteceu. */
+const PRAZO_MS = 20e3;
+
+function comPrazo(opts) {
+  if (typeof AbortSignal?.timeout !== 'function') return opts;
+  const prazo = AbortSignal.timeout(PRAZO_MS);
+  const sinal = opts.signal && typeof AbortSignal.any === 'function'
+    ? AbortSignal.any([opts.signal, prazo])
+    : (opts.signal || prazo);
+  return { ...opts, signal: sinal };
 }
 
 /**

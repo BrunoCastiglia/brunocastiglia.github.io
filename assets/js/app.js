@@ -2,17 +2,17 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=42';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=42';
-import * as GEO from './data/geo.js?v=42';
-import { ligadosPorTerra } from './data/landmass.js?v=42';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=42';
-import * as FX from './fx.js?v=42';
-import * as P from './providers/index.js?v=42';
-import { bookingLinks } from './links.js?v=42';
-import * as RYA from './providers/ryanair.js?v=42';
-import * as OSM from './providers/osm-stays.js?v=42';
-import { mountAllAds } from './ads.js?v=42';
+import { DESTINATIONS } from './data/destinations.js?v=43';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=43';
+import * as GEO from './data/geo.js?v=43';
+import { ligadosPorTerra } from './data/landmass.js?v=43';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=43';
+import * as FX from './fx.js?v=43';
+import * as P from './providers/index.js?v=43';
+import { bookingLinks } from './links.js?v=43';
+import * as RYA from './providers/ryanair.js?v=43';
+import * as OSM from './providers/osm-stays.js?v=43';
+import { mountAllAds } from './ads.js?v=43';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -797,6 +797,7 @@ function search({ refit = true } = {}) {
 let faresAbort;
 let faresPedido;
 let primeiraAbertura = true;   // a abertura animada é só na primeira carga
+let desistirTimer;
 
 /**
  * Pede a busca de preços reais, juntando chamadas próximas numa só.
@@ -859,9 +860,17 @@ async function loadRealFares() {
     primeiraAbertura = false;
     state.abrindo = true;
     $('.map-wrap')?.classList.add('abrindo');
-    // Rede de segurança: se a varredura travar, a abertura não fica eterna.
-    setTimeout(fecharAbertura, 45e3);
   }
+
+  // Rede de segurança: por mais cuidado que se tenha com prazos e filas, uma
+  // varredura que não termina não pode deixar a tela pendurada — os preços
+  // recuados e a teia por cima deles, para sempre. Passado um minuto, a tela
+  // se acerta com o que tiver.
+  clearTimeout(desistirTimer);
+  desistirTimer = setTimeout(() => {
+    state.varreduraPronta = true;
+    fecharAbertura();
+  }, 60e3);
   try {
     const airports = await RYA.loadAirports();
     if (signal.aborted) return;
@@ -1016,6 +1025,7 @@ async function loadRealFares() {
     if (RYA.estaBloqueado()) return acompanharPausa();
     await varrerMalha(saidas, porIata, destinoDoAeroporto, signal);
     state.varreduraPronta = true;
+    clearTimeout(desistirTimer);
     if (signal.aborted) return;
     setFareStatus(acumulado.size ? 'ok' : 'none');
     fecharAbertura();
