@@ -132,8 +132,23 @@ export function tripCost(origin, dest, opts) {
      Quem monta a tarifa já resolveu isso: `visto.total` é a soma das duas
      pernas, e é sempre ele que entra na conta. Usar `visto.p` daria o site
      dizendo "vá ao Rio por € 1028" e escondendo a passagem até Roma. */
-  const visto = !real && (opts.vistos?.get(dest.id) || null);
-  const airPP = real ? real.price : visto ? (visto.total ?? visto.p) : estimated;
+  const vistoBruto = !real && (opts.vistos?.get(dest.id) || null);
+  const totalVisto = vistoBruto ? (vistoBruto.total ?? vistoBruto.p) : null;
+
+  /* Dentro da malha que consultamos ao vivo, a tarifa vista só vale se for
+     MAIS BARATA. Sem esta trava o resumo de Santiago de Compostela anunciava
+     € 639 — uma tarifa de Paris mais € 216 só para chegar a Paris — enquanto o
+     painel logo abaixo mostrava € 114 indo ao Porto de avião e pegando um
+     ônibus. Anunciar o pior caminho que o próprio site encontrou é pior que
+     não ter a informação.
+
+     Fora da malha a regra se inverte e a tarifa vista entra mesmo sendo cara:
+     para o Rio ela diz € 1028, contra os € 527 que a nossa conta estimava, e
+     quem está errado é a estimativa. */
+  const naMalha = opts.temVooDireto?.has(dest.id) || opts.viaEscala?.has(dest.id);
+  const visto = vistoBruto && (!naMalha || totalVisto < estimated) ? vistoBruto : null;
+
+  const airPP = real ? real.price : visto ? totalVisto : estimated;
   const ground = groundPriceEUR(km);
   const useGround = ground !== null && ground < airPP;
 

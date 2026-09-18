@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=58';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=58';
-import * as GEO from './data/geo.js?v=58';
-import { ligadosPorTerra } from './data/landmass.js?v=58';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=58';
-import * as FX from './fx.js?v=58';
-import * as P from './providers/index.js?v=58';
-import { bookingLinks } from './links.js?v=58';
-import * as RYA from './providers/ryanair.js?v=58';
-import * as OSM from './providers/osm-stays.js?v=58';
-import * as TP from './providers/travelpayouts.js?v=58';
-import { mountAllAds } from './ads.js?v=58';
+import { DESTINATIONS } from './data/destinations.js?v=60';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=60';
+import * as GEO from './data/geo.js?v=60';
+import { ligadosPorTerra } from './data/landmass.js?v=60';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=60';
+import * as FX from './fx.js?v=60';
+import * as P from './providers/index.js?v=60';
+import { bookingLinks } from './links.js?v=60';
+import * as RYA from './providers/ryanair.js?v=60';
+import * as OSM from './providers/osm-stays.js?v=60';
+import * as TP from './providers/travelpayouts.js?v=60';
+import { mountAllAds } from './ads.js?v=60';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -873,6 +873,25 @@ function search({ refit = true } = {}) {
  */
 const MAX_HUBS = 9;
 
+/**
+ * O hub está no caminho, ou é um desvio?
+ *
+ * Sem esta pergunta o site anunciava Lyon por € 387 via Paris — € 216 só para
+ * chegar a Paris — quando a estimativa era € 92, e Túnis por € 140 via Milão
+ * contra € 54. Voar para o norte da Europa para depois descer não é um
+ * caminho; é um desvio que ninguém faria.
+ *
+ * A conta é a mesma que a busca de escalas da companhia já usa: o trajeto por
+ * fora não pode ser muito maior que a linha reta. A folga fixa existe para as
+ * distâncias curtas, onde qualquer desvio parece grande em proporção.
+ */
+function hubNoCaminho(hub, destino) {
+  if (!state.origin) return true;
+  const direto = distanciaSimples(state.origin, destino);
+  const porFora = distanciaSimples(state.origin, hub) + distanciaSimples(hub, destino);
+  return porFora <= Math.max(direto * 1.4, direto + 400);
+}
+
 async function varrerHubs(saidas, signal) {
   state.vistos = new Map();
   state.hubs = [];
@@ -888,12 +907,14 @@ async function varrerHubs(saidas, signal) {
   const guardar = (tarifas, hub, trecho) => {
     let acendeu = 0;
     for (const [id, oferta] of tarifas) {
+      const d = porId.get(id);
+      if (d && !hubNoCaminho(hub, d)) continue;
+
       const total = oferta.p + (trecho?.price || 0);
       const antes = state.vistos.get(id);
       if (antes && antes.total <= total) continue;
       state.vistos.set(id, { ...oferta, total, hub, trecho });
       if (!antes) acendeu++;
-      const d = porId.get(id);
       if (d) acenderTeia(hub, d, 'vista');
     }
     return acendeu;
@@ -1361,8 +1382,19 @@ function setFareStatus(kind, progresso = null) {
                   ? `${progresso.saida} (${progresso.ordem} de ${progresso.saidas}) — ` +
                     `lote ${progresso.feitos} de ${progresso.total}`
                   : 'varrendo destinos'],
+    /* "via FCO, MIL, BCN…" lia-se como se a viagem partisse de nove aeroportos
+       estrangeiros. Ela parte SEMPRE de um dos aeroportos de casa: aqueles são
+       a escala onde se pega o voo longo, e o aviso tem de dizer isso — e em
+       três nomes, porque nove viram uma parede de siglas. */
     vistos:    [String(state.vistos.size), state.hubs.length
-                  ? `preços vistos via ${state.hubs.map(h => h.iata).join(', ')}`
+                  ? (() => {
+                      const nomes = state.hubs.map(h => h.city || h.iata);
+                      const mostra = nomes.slice(0, 3).join(', ');
+                      const resto = nomes.length - 3;
+                      const daqui = state.originAirports.map(a => a.iata).join('/');
+                      return `preços com escala em ${mostra}${resto > 0 ? ` +${resto}` : ''}`
+                        + (daqui ? ` — saindo de ${daqui}` : '');
+                    })()
                   : 'preços vistos recentemente'],
     ondas:     [String(n), progresso
                   ? `onda ${progresso.nivel} — ${progresso.alcance} aeroportos na teia`
