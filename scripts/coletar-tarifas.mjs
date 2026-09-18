@@ -138,10 +138,18 @@ async function tarifasDoMes(origem, mes) {
   });
 
   const res = await fetch(`${API}?${qs}`, {
-    headers: { 'X-Access-Token': TOKEN, 'Accept-Encoding': 'gzip, deflate' },
+    headers: { 'X-Access-Token': TOKEN.trim(), 'Accept-Encoding': 'gzip, deflate' },
     signal: AbortSignal.timeout(30_000),
   });
 
+  // 401/403 não é tropeço: é credencial recusada, e ela não vai melhorar na
+  // próxima tentativa. Sem isto o script varria as 246 consultas inteiras
+  // batendo numa porta fechada, o que só suja o registro e a API de terceiros.
+  if (res.status === 401 || res.status === 403) {
+    const e = new Error(`token recusado (HTTP ${res.status})`);
+    e.fatal = true;
+    throw e;
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const corpo = await res.json();
   if (!corpo.success) throw new Error(corpo.error || 'resposta sem sucesso');
@@ -177,6 +185,14 @@ if (!TOKEN) {
   process.exit(1);
 }
 
+/* Diagnóstico sem vazar nada: só o formato. Um token do Travelpayouts são 32
+   caracteres hexadecimais; comprimento diferente, espaço em branco na ponta ou
+   caractere estranho explicam um 401 muito melhor que "credencial inválida". */
+const limpo = TOKEN.trim();
+console.log(`Token: ${limpo.length} caracteres`
+  + `${/^[0-9a-f]{32}$/i.test(limpo) ? ', formato esperado' : ', FORA do formato esperado (32 hex)'}`
+  + `${limpo !== TOKEN ? ' — ATENÇÃO: veio com espaço ou quebra de linha na ponta' : ''}`);
+
 const meses = proximosMeses(MESES);
 console.log(`Coletando ${ORIGENS.length} origens × ${meses.length} meses (${meses[0]} a ${meses.at(-1)})`);
 
@@ -195,6 +211,7 @@ for (const origem of ORIGENS) {
       consultas++;
       if (linhas.length) { porMes[mes] = linhas; total += linhas.length; }
     } catch (err) {
+      if (err.fatal) { console.error(`\n${err.message}`); process.exit(1); }
       falhas++;
       // Uma origem que falha não derruba a coleta: o arquivo anterior continua
       // no repositório e o site segue usando o que já tinha.
