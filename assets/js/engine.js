@@ -149,6 +149,11 @@ export function tripCost(origin, dest, opts) {
   const visto = vistoBruto && (!naMalha || totalVisto < estimated) ? vistoBruto : null;
 
   const airPP = real ? real.price : visto ? totalVisto : estimated;
+
+  /* Quando a tarifa é de outra duração, a hospedagem tem de acompanhar: somar
+     um voo de 16 noites com 7 diárias daria um total que não existe em lugar
+     nenhum. A tela diz quantas noites são, e a conta usa as mesmas. */
+  const noitesReais = visto?.foraDaFaixa ? Math.max(1, visto.n) : nights;
   const ground = groundPriceEUR(km);
   const useGround = ground !== null && ground < airPP;
 
@@ -157,14 +162,14 @@ export function tripCost(origin, dest, opts) {
   // hostel é cobrado por pessoa; quarto é dividido entre 2
   const nightly = dest.stay[style] * staySeason;
   const rooms = style === 0 ? people : Math.ceil(people / 2);
-  const stay = mode.stay ? Math.round(nightly * rooms * nights) : 0;
+  const stay = mode.stay ? Math.round(nightly * rooms * noitesReais) : 0;
 
   const total = Math.round(flight + stay);
   const left = budgetEUR - total;
   const verdict = total <= budgetEUR ? 'fit' : total <= budgetEUR * 1.15 ? 'tight' : 'over';
 
   return {
-    dest, km, nights, days, people, style, month,
+    dest, km, nights, days, people, style, month, noitesReais,
     hours: flightHours(km), stops: flightStops(km),
     season, useGround, airPP, groundPP: ground,
     real, visto, viaEscala, estimatedAirPP: estimated,

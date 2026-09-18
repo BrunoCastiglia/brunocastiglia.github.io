@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=70';
-import { ligadosPorTerra } from '../data/landmass.js?v=70';
+import { distanceKm } from '../engine.js?v=71';
+import { ligadosPorTerra } from '../data/landmass.js?v=71';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -148,12 +148,31 @@ export async function tarifasDe(iata, month, days) {
   const faixa = faixaDe(days);
   const tarifas = new Map();
 
+  /* A faixa pedida manda — mas calar quando ela está vazia é pior que
+     responder fora dela. O Rio saindo da Sardenha existe em 16 noites e não em
+     7, e o site simplesmente não mostrava: quem procurava ficava sem saber se
+     não há voo ou se não há voo NAQUELES dias. São coisas muito diferentes.
+
+     Então a de outra duração entra, marcada, e a tela diz quantas noites são.
+     Entre as de fora, ganha a mais próxima do que foi pedido; entre as de
+     mesma distância, a mais barata. */
   for (const f of doMes) {
-    // Só a faixa pedida. Uma tarifa de quinze noites não responde a quem pediu
-    // uma semana, por mais barata que seja.
-    if (faixa && f.f !== faixa) continue;
+    if (f.d !== f.d) continue;
+    const dentro = !faixa || f.f === faixa;
     const anterior = tarifas.get(f.d);
-    if (!anterior || anterior.p > f.p) tarifas.set(f.d, f);
+
+    if (anterior) {
+      const anteriorDentro = !anterior.foraDaFaixa;
+      if (anteriorDentro && !dentro) continue;               // o de dentro fica
+      if (anteriorDentro === dentro) {
+        if (dentro) { if (anterior.p <= f.p) continue; }
+        else {
+          const dA = Math.abs(anterior.n - days), dF = Math.abs(f.n - days);
+          if (dA < dF || (dA === dF && anterior.p <= f.p)) continue;
+        }
+      }
+    }
+    tarifas.set(f.d, dentro ? f : { ...f, foraDaFaixa: true });
   }
 
   return { faixa, tarifas, atualizado: dados.atualizado };

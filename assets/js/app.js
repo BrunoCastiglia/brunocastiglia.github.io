@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=70';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=70';
-import * as GEO from './data/geo.js?v=70';
-import { ligadosPorTerra } from './data/landmass.js?v=70';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=70';
-import * as FX from './fx.js?v=70';
-import * as P from './providers/index.js?v=70';
-import { bookingLinks } from './links.js?v=70';
-import * as RYA from './providers/ryanair.js?v=70';
-import * as OSM from './providers/osm-stays.js?v=70';
-import * as TP from './providers/travelpayouts.js?v=70';
-import { mountAllAds } from './ads.js?v=70';
+import { DESTINATIONS } from './data/destinations.js?v=71';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=71';
+import * as GEO from './data/geo.js?v=71';
+import { ligadosPorTerra } from './data/landmass.js?v=71';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=71';
+import * as FX from './fx.js?v=71';
+import * as P from './providers/index.js?v=71';
+import { bookingLinks } from './links.js?v=71';
+import * as RYA from './providers/ryanair.js?v=71';
+import * as OSM from './providers/osm-stays.js?v=71';
+import * as TP from './providers/travelpayouts.js?v=71';
+import { mountAllAds } from './ads.js?v=71';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -728,7 +728,9 @@ function drawResults() {
            ? '<br><span class="tip-direto">☆ tem voo direto — abra para ver o preço</span>'
            : r.visto && !r.useGround
              ? `<br><span class="tip-visto">◆ ${fmt(r.visto.total)} visto há pouco —
-                 ${r.visto.n} noites via ${esc(r.visto.hub?.city || '')}${
+                 <b>${r.visto.n} noites</b>${r.visto.foraDaFaixa
+                   ? `, e não as ${r.days} que você pediu` : ''}
+                 via ${esc(r.visto.hub?.city || '')}${
                    r.visto.trecho ? ` (inclui ${fmt(r.visto.trecho.price)} até lá)` : ''},
                  não é cotação</span>`
              : '<br><span class="tip-est">valor estimado</span>'}`,
@@ -1664,6 +1666,16 @@ function textoSemConfirmado(r) {
   // frase: ninguém conferiu que ainda está lá.
   if (r.visto) {
     const v = r.visto;
+    /* Dito antes do preço, e não depois: quem pediu uma semana precisa saber
+       que está lendo uma viagem de outro tamanho ANTES de se animar com o
+       valor. Calar sobre isso era o que fazia o destino sumir do mapa — e
+       sumir sem explicação é pior que aparecer com ressalva. */
+    const aviso = v.foraDaFaixa
+      ? `<b>Nestes ${r.days} dias não encontramos voo para cá.</b> O que existe é
+         uma viagem de <b>${v.n} noites</b> — ${v.n > r.days ? 'mais longa' : 'mais curta'}
+         que a sua —, e o valor abaixo é dela, com a hospedagem recalculada para
+         essas noites.<br>`
+      : '';
     const quando = v.ida && v.volta ? `${fmtDate(v.ida)} → ${fmtDate(v.volta)}` : '';
     // Cada tarifa carrega o hub de onde ela parte e, quando esse hub não se
     // alcança por terra, o voo até lá com preço. As duas pernas precisam estar
@@ -1676,7 +1688,7 @@ function textoSemConfirmado(r) {
              <b>${fmt(t.price)}</b> ida e volta — já somado ao total acima`
       : hub.km > 60 ? ` partindo de ${esc(hub.city)} (${esc(hub.iata)}), a ${hub.km} km de você`
       : '';
-    return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
+    return `${aviso}<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
             últimos dias${saindo} — ${esc(TP.vooPorExtenso(v.cia, v.voo))},
             ${quando}, ${v.n} noites${v.esc ? `, ${v.esc} escala${v.esc > 1 ? 's' : ''}` : ', direto'}.
             <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.
@@ -1701,7 +1713,8 @@ function renderDetails(r) {
 
   $('#detailsTitle').innerHTML =
     `<span class="tag ${v.cls}">${v.tag}</span> ${esc(r.dest.city)}, ${esc(r.dest.country)}
-     — ${fmt(r.total)} · ${mode.short} · ${r.people > 1 ? r.people + ' pessoas · ' : ''}${r.days} dias`;
+     — ${fmt(r.total)} · ${mode.short} · ${r.people > 1 ? r.people + ' pessoas · ' : ''}${
+       r.visto?.foraDaFaixa ? `${r.noitesReais} noites` : `${r.days} dias`}`;
 
   const parts = [
     { k:'flight', label:'Voo',        v:r.flight },
