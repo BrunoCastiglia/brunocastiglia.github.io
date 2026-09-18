@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=48';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=48';
-import * as GEO from './data/geo.js?v=48';
-import { ligadosPorTerra } from './data/landmass.js?v=48';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=48';
-import * as FX from './fx.js?v=48';
-import * as P from './providers/index.js?v=48';
-import { bookingLinks } from './links.js?v=48';
-import * as RYA from './providers/ryanair.js?v=48';
-import * as OSM from './providers/osm-stays.js?v=48';
-import * as TP from './providers/travelpayouts.js?v=48';
-import { mountAllAds } from './ads.js?v=48';
+import { DESTINATIONS } from './data/destinations.js?v=49';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=49';
+import * as GEO from './data/geo.js?v=49';
+import { ligadosPorTerra } from './data/landmass.js?v=49';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=49';
+import * as FX from './fx.js?v=49';
+import * as P from './providers/index.js?v=49';
+import { bookingLinks } from './links.js?v=49';
+import * as RYA from './providers/ryanair.js?v=49';
+import * as OSM from './providers/osm-stays.js?v=49';
+import * as TP from './providers/travelpayouts.js?v=49';
+import { mountAllAds } from './ads.js?v=49';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -638,6 +638,12 @@ function assentarTela() {
   if (!state.varreduraPronta || filaTeia.length) return;
 
   if (state.abrindo) {
+    // Um último enquadramento, agora que a teia está inteira. Sem ele o
+    // resultado dependia de quantos fios havia: o zoom só abre entre um lote e
+    // outro, com folga de 1,2 s, e uma teia curta — dezesseis fios saindo de
+    // São Paulo — acabava antes do segundo passo. O mapa parava no meio do
+    // caminho, mostrando um destino de dezesseis.
+    if (limiteTeia && !state.mapaDaPessoa) voarPara(limiteTeia, [60, 60], 7);
     state.abrindo = false;
     $('.map-wrap')?.classList.remove('abrindo');
   }

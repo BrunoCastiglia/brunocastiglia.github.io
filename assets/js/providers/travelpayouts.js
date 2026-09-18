@@ -21,7 +21,7 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=48';
+import { distanceKm } from '../engine.js?v=49';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
