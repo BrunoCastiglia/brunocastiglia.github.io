@@ -510,15 +510,57 @@ function search({ refit = true } = {}) {
 
 /* ------------------------------------------- tarifas reais (Ryanair) ---- */
 let faresAbort;
+let faresPedido;
+
+/**
+ * Pede a busca de preços reais, juntando chamadas próximas numa só.
+ *
+ * Ao abrir a página a origem é definida duas vezes: o IP responde na hora e o
+ * GPS corrige segundos depois. Cada uma disparava uma busca completa, e a
+ * segunda cancelava a primeira no meio — jogando fora tudo que já tinha
+ * chegado e recomeçando do zero. Um respiro curto faz as duas virarem uma.
+ */
+function pedirTarifasReais(atraso = 350) {
+  clearTimeout(faresPedido);
+  faresPedido = setTimeout(loadRealFares, atraso);
+}
+
+/**
+ * Acompanha uma pausa até o fim e retoma a busca sozinho.
+ *
+ * Sem isto a pausa era definitiva para quem está olhando: o aviso ficava
+ * parado e os preços só voltavam se a pessoa mexesse em alguma coisa ou
+ * recarregasse a página — que é exatamente a impressão de "não carrega voos
+ * que eu sei que existem".
+ */
+let pausaTimer;
+function acompanharPausa() {
+  clearInterval(pausaTimer);
+  if (!RYA.estaBloqueado()) return;
+  setFareStatus('pausa');
+  pausaTimer = setInterval(() => {
+    if (RYA.estaBloqueado()) return setFareStatus('pausa');
+    clearInterval(pausaTimer);
+    if (state.origin) loadRealFares();
+  }, 1000);
+}
 
 /**
  * Busca preços reais de voo e, se vierem, refaz a conta com eles.
- * Roda em segundo plano: o site já mostrou as estimativas e só melhora
- * quando a resposta chega. Qualquer falha é silenciosa.
+ *
+ * Roda em segundo plano: o site já mostrou as estimativas e só melhora quando
+ * a resposta chega. Qualquer falha é silenciosa.
+ *
+ * A ordem é de propósito: um aeroporto de saída inteiro por vez, do mais perto
+ * de casa para o mais longe, e só depois a rede de escalas. Antes as rotas das
+ * cinco saídas eram pedidas de uma vez antes de qualquer preço; agora cada
+ * saída acende os seus destinos no mapa antes de a seguinte começar, e a fila
+ * nunca fica com um monte de pedidos concorrendo pela mesma vaga.
  */
 async function loadRealFares() {
   if (!state.origin) return;
-  if (RYA.estaBloqueado()) return setFareStatus('pausa');
+  if (RYA.estaBloqueado()) return acompanharPausa();
+  clearTimeout(faresPedido);
   faresAbort?.abort();
   faresAbort = new AbortController();
   const signal = faresAbort.signal;
@@ -540,37 +582,9 @@ async function loadRealFares() {
     state.originAirport = saidas[0] || null;
     if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
 
-    // Quais destinos têm voo direto de alguma das saídas — pela MALHA, não
-    // pelas tarifas já conhecidas.
-    //
-    // O filtro "só voo direto" usava as tarifas, e a consulta geral traz só os
-    // 20 destinos mais baratos de cada aeroporto. O Porto tem voo direto de
-    // Cagliari e ficava escondido pelo filtro; como o preço só é buscado ao
-    // abrir o destino, e o filtro o escondia, ele nunca aparecia. As rotas
-    // ficam 30 dias em cache: são 5 consultas, uma por saída.
     const porIata = new Map(airports.map(a => [a.iata, a]));
     const diretos = new Set();
-    const rotasUteis = new Map();          // saída IATA -> aeroportos que servem algum destino
-    for (const saida of saidas) {
-      rotasUteis.set(saida.iata, []);
-      const rotas = await RYA.routesFrom(saida.iata, signal);
-      if (signal.aborted) return;
-      for (const rota of rotas) {
-        const apt = porIata.get(rota.iata);
-        if (!apt) continue;
-        let melhor = null, menor = Infinity;
-        for (const d of DESTINATIONS) {
-          const km = distanciaSimples(apt, d);
-          if (km < menor) { menor = km; melhor = d; }
-        }
-        if (melhor && menor <= 130) {
-          diretos.add(melhor.id);
-          rotasUteis.get(saida.iata).push(rota.iata);
-        }
-      }
-    }
     state.temVooDireto = diretos;
-    search({ refit:false });
 
     // Tarifas de todas as saídas, juntadas: para cada destino fica a mais
     // barata, junto com o aeroporto de onde ela parte.
@@ -591,46 +605,78 @@ async function loadRealFares() {
       search({ refit:false });                  // refaz a conta com preço real
     };
 
+    /* Um aeroporto de saída, do começo ao fim: descobre para onde ele voa,
+       marca os destinos que têm voo direto e busca o preço de todos eles. */
+    async function varrerSaida(saida, ordem) {
+      // Quais destinos têm voo direto desta saída — pela MALHA, não pelas
+      // tarifas já conhecidas. O filtro "só voo direto" usava as tarifas, e a
+      // consulta geral traz só os 20 destinos mais baratos de cada aeroporto:
+      // o Porto tem voo direto de Cagliari e ficava escondido pelo filtro.
+      // As rotas ficam 30 dias em cache, então isto custa uma consulta só.
+      const rotas = await RYA.routesFrom(saida.iata, signal, true);
+      if (signal.aborted) return;
+
+      const uteis = [];
+      for (const rota of rotas) {
+        const apt = porIata.get(rota.iata);
+        if (!apt) continue;
+        let melhor = null, menor = Infinity;
+        for (const d of DESTINATIONS) {
+          const km = distanciaSimples(apt, d);
+          if (km < menor) { menor = km; melhor = d; }
+        }
+        if (melhor && menor <= 130) { diretos.add(melhor.id); uteis.push(rota.iata); }
+      }
+      search({ refit:false });                  // o filtro já enxerga esta saída
+      if (!uteis.length) return;
+
+      // Preço de TODOS os destinos desta saída, em lotes.
+      //
+      // A consulta geral devolve só as 20 ofertas mais baratas de cada
+      // aeroporto, mas Cagliari sozinha serve 42 rotas: metade dos destinos
+      // diretos ficava com estimativa. Buscar por país tampouco resolvia —
+      // essa consulta também corta em 20. O que resolve é pedir os destinos
+      // pelo nome: `arrivalAirportIataCodes` aceita uma lista, então partimos
+      // as rotas em lotes de 15 e juntamos as respostas. São 3 requisições por
+      // aeroporto e o mapa vai acendendo as estrelas a cada lote.
+      const total = Math.ceil(uteis.length / RYA.LOTE_DESTINOS);
+      let feitos = 0;
+
+      await RYA.sweepFares(saida.iata, uteis, state.month, state.days, signal, novas => {
+        if (signal.aborted) return;
+        feitos++;
+        if (novas.size) { juntar(novas, saida); aplicar(); }
+        // depois do aplicar(), que também mexe no aviso
+        setFareStatus('varrendo', {
+          feitos, total, saida: saida.iata, ordem, saidas: saidas.length,
+        });
+      });
+    }
+
     // Primeira pintura: a consulta geral da saída mais próxima, uma requisição
     // só. Traz os 20 destinos mais baratos dela, então o mapa já tem preço real
     // antes de a varredura começar. Serve também de rede de segurança caso a
     // malha de rotas venha vazia.
-    const rapidas = await RYA.fetchFares(saidas[0].iata, state.month, state.days, signal);
+    const rapidas = await RYA.fetchFares(
+      saidas[0].iata, state.month, state.days, signal, null, true);
     if (signal.aborted) return;
     juntar(rapidas, saidas[0]);
     aplicar();
 
-    // Preço de TODOS os destinos com voo direto, em lotes.
-    //
-    // A consulta geral devolve só as 20 ofertas mais baratas de cada aeroporto,
-    // mas Cagliari sozinha serve 42 rotas: metade dos destinos diretos ficava
-    // com estimativa. Buscar por país tampouco resolvia — essa consulta também
-    // corta em 20, e ampliar de oito para catorze países não mudava nada.
-    //
-    // O que resolve é pedir os destinos pelo nome: `arrivalAirportIataCodes`
-    // aceita uma lista, então partimos as rotas de cada saída em lotes de 15 e
-    // juntamos as respostas. São 3 requisições por aeroporto e o mapa vai
-    // acendendo as estrelas a cada lote, sem esperar o fim.
-    let lotesFeitos = 0;
-    const lotesTotais = saidas.reduce(
-      (n, s) => n + Math.ceil((rotasUteis.get(s.iata)?.length || 0) / RYA.LOTE_DESTINOS), 0);
-
-    for (const saida of saidas) {
-      if (signal.aborted || RYA.estaBloqueado()) break;
-      const rotas = rotasUteis.get(saida.iata) || [];
-      if (!rotas.length) continue;
-
-      await RYA.sweepFares(saida.iata, rotas, state.month, state.days, signal, novas => {
-        if (signal.aborted) return;
-        lotesFeitos++;
-        if (novas.size) { juntar(novas, saida); aplicar(); }
-        // depois do aplicar(), que também mexe no aviso
-        setFareStatus('varrendo', { feitos: lotesFeitos, total: lotesTotais });
-      });
+    // Daqui para a frente, uma saída de cada vez, da mais perto para a mais
+    // longe. Se a API entrar em pausa no meio, o que já acendeu fica.
+    for (const [i, saida] of saidas.entries()) {
+      if (signal.aborted) return;
+      if (RYA.estaBloqueado()) return acompanharPausa();
+      await varrerSaida(saida, i + 1);
     }
-    if (!signal.aborted) setFareStatus(acumulado.size ? 'ok' : 'none');
+    if (signal.aborted) return;
+    setFareStatus(acumulado.size ? 'ok' : 'none');
 
-    // Rede de escalas das saídas mais próximas, para o filtro do mapa.
+    // Por último a rede de escalas, das duas saídas mais próximas: é a parte
+    // mais cara (oito consultas por saída) e a que menos gente olha, então ela
+    // só começa depois que todo preço direto já está na tela.
+    if (RYA.estaBloqueado()) return acompanharPausa();
     const alcanceTotal = new Map();
     for (const saida of saidas.slice(0, 2)) {
       const alcance = await RYA.reachableWithStop(saida.iata, signal, parcial => {
@@ -642,7 +688,8 @@ async function loadRealFares() {
       casarEscalas(alcanceTotal, airports);
     }
   } catch {
-    if (!signal.aborted) setFareStatus('none');
+    if (signal.aborted) return;
+    if (RYA.estaBloqueado()) acompanharPausa(); else setFareStatus('none');
   }
 }
 
@@ -693,9 +740,10 @@ function setFareStatus(kind, progresso = null) {
   const texts = {
     loading:   ['…', 'buscando preços reais de voo'],
     varrendo:  [String(n), progresso
-                  ? `varrendo destinos — ${progresso.feitos} de ${progresso.total}`
+                  ? `${progresso.saida} (${progresso.ordem} de ${progresso.saidas}) — ` +
+                    `lote ${progresso.feitos} de ${progresso.total}`
                   : 'varrendo destinos'],
-    pausa:     ['', 'muitas consultas seguidas — pausando alguns minutos'],
+    pausa:     ['', `muitas consultas seguidas — voltamos em ${RYA.segundosDePausa()} s`],
     ok:        [String(n), `preços reais${saidas ? ' de ' + saidas : ''}`],
     uncovered: ['', 'sem voos Ryanair perto da sua origem — voos estimados'],
     none:      ['', 'preços reais indisponíveis agora — voos estimados'],
@@ -1239,7 +1287,7 @@ async function prepararBuscaDeCaminhos(r) {
   caixa.classList.remove('conexao-direta', 'duas-opcoes');
   if (RYA.estaBloqueado()) {
     caixa.innerHTML = `<span class="conexao-load">muitas consultas seguidas à companhia —
-      aguarde alguns minutos e tente de novo</span>`;
+      voltamos em ${RYA.segundosDePausa()} s</span>`;
     return;
   }
 
@@ -1721,7 +1769,7 @@ function pickOrigin(o, { salvar = true } = {}) {
 
   drawOrigin();
   search();
-  loadRealFares();
+  pedirTarifasReais();
 }
 
 /* -------------------------------------------------- detectar a origem --- */
@@ -1980,8 +2028,7 @@ function setupQuando() {
     state.realFares = new Map();       // outra janela, outras tarifas
     state.caminhosPorDestino.clear();  // e outros caminhos
     debouncedSearch();
-    clearTimeout(faresTimer);
-    faresTimer = setTimeout(loadRealFares, 700);
+    pedirTarifasReais(700);
   };
 
   // alternância entre os dois modos
@@ -2308,7 +2355,7 @@ const fmtDuracao = min => {
   const h = Math.floor(min / 60), m = min % 60;
   return h ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`;
 };
-let searchTimer, faresTimer;
+let searchTimer;
 const debouncedSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => search({ refit:false }), 320); };
 
 /* ------------------------------------------------------------- boot ---- */

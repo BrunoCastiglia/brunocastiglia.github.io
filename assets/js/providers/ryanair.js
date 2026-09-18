@@ -51,52 +51,128 @@ const TTL_FARES      = 12 * 3600e3;       // 12 horas — tarifa não muda de ho
 /* ---------------------------------------------------- fila de pedidos --- */
 /*
    Procurar caminhos dispara muitas consultas: cada hub candidato tem duas
-   pernas, cada perna tenta três janelas de horário, e isso se repete para a
+   pernas, cada perna tenta duas janelas de horário, e isso se repete para a
    volta. Sem controle, uma única busca passava de cem requisições e a API
    começava a recusar — respondendo sem os cabeçalhos de CORS, o que aparece no
    console como erro de origem, não como bloqueio por volume.
 
-   Aqui tudo passa por uma fila: no máximo 3 ao mesmo tempo, com um respiro
-   entre disparos. Fica mais lento, e é o preço de continuar sendo atendido.
+   Tudo passa por esta fila, que tem duas faixas. O que a pessoa está esperando
+   na tela — o destino que ela acabou de abrir — corre na faixa da frente; a
+   varredura que pinta o mapa sozinha corre atrás. Assim a varredura pode ser
+   devagar sem deixar ninguém esperando, que é o que permite ir aos poucos.
 */
 const LIMITE_SIMULTANEO = 2;
 const RESPIRO_MS = 250;
 
+let emVoo = 0;
+const espera = [];        // o que a pessoa está esperando
+const esperaFundo = [];   // a varredura do mapa
+
 /* Quando a API começa a recusar (403/429), ela responde sem os cabeçalhos de
    CORS e o navegador reporta erro de origem — parece outra coisa. Ao detectar,
-   paramos de pedir por alguns minutos em vez de insistir e piorar. */
+   paramos de pedir por alguns minutos em vez de insistir e piorar.
+
+   O cuidado é não confundir recusa com as outras duas coisas que também
+   rejeitam um fetch: a busca cancelada e o tropeço de rede. Antes qualquer uma
+   delas punha o site inteiro em pausa de cinco minutos — e como cada troca de
+   origem cancela a busca anterior, o GPS corrigindo o que o IP tinha chutado
+   já bastava: abrir a página entrava em pausa sozinho e o mapa ficava sem voos
+   que existem. Agora só a recusa de verdade pausa na hora, o tropeço de rede
+   precisa se repetir três vezes, e a pausa começa curta e só dobra se insistir. */
+const PAUSAS_MS = [45e3, 90e3, 3 * 60e3, 5 * 60e3];
+const FALHAS_ATE_PAUSAR = 3;
+
 let bloqueadoAte = 0;
+let pausasSeguidas = 0;
+let falhasSeguidas = 0;
+
 export const estaBloqueado = () => Date.now() < bloqueadoAte;
+
+/** Quanto falta da pausa, em segundos — a tela conta isso para a pessoa. */
+export const segundosDePausa = () =>
+  Math.max(0, Math.ceil((bloqueadoAte - Date.now()) / 1000));
+
+/** Cancelamento não é falha: a busca anterior morreu porque pedimos. */
+const foiCancelado = err => err?.name === 'AbortError';
+
 function marcarBloqueio() {
-  bloqueadoAte = Date.now() + 5 * 60e3;
-  espera.length = 0;                     // descarta o que estava na fila
+  bloqueadoAte = Date.now() + PAUSAS_MS[Math.min(pausasSeguidas, PAUSAS_MS.length - 1)];
+  pausasSeguidas++;
+  falhasSeguidas = 0;
+  esvaziarFila('em pausa');
 }
-let emVoo = 0;
-const espera = [];
+
+/** Uma resposta chegou: a API está atendendo, os contadores voltam a zero. */
+function marcarSucesso() {
+  falhasSeguidas = 0;
+  pausasSeguidas = 0;
+}
+
+function esvaziarFila(motivo) {
+  for (const p of [...espera, ...esperaFundo]) p.cancelar(motivo);
+  espera.length = 0;
+  esperaFundo.length = 0;
+}
 
 function liberarVaga() {
   emVoo--;
-  const proximo = espera.shift();
-  if (proximo) setTimeout(proximo, RESPIRO_MS);
+  // Pedidos de uma busca já cancelada saem da fila sem gastar vaga: quando a
+  // pessoa troca o mês no meio da varredura, a fila inteira vira lixo e não
+  // faz sentido gastar os próximos segundos disparando o que ninguém espera.
+  for (;;) {
+    const proximo = espera.shift() || esperaFundo.shift();
+    if (!proximo) return;
+    if (proximo.opts?.signal?.aborted) { proximo.cancelar('cancelado'); continue; }
+    setTimeout(proximo.disparar, RESPIRO_MS);
+    return;
+  }
 }
 
-/** fetch com fila: mesma assinatura, com limite de simultaneidade. */
-function pedir(url, opts) {
+/**
+ * Uma segunda tentativa para tropeço de rede.
+ *
+ * Um lote perdido são quinze destinos sem preço até a pessoa recarregar a
+ * página — e, do lado dela, é um voo que ela sabe que existe e não apareceu.
+ * Só erro de rede é repetido: cancelamento e resposta HTTP passam direto.
+ */
+async function comRetentativa(url, opts) {
+  try {
+    return await fetch(url, opts);
+  } catch (err) {
+    if (foiCancelado(err) || estaBloqueado()) throw err;
+    await new Promise(r => setTimeout(r, 900));
+    if (opts.signal?.aborted) throw err;
+    return fetch(url, opts);
+  }
+}
+
+/**
+ * fetch com fila: mesma assinatura, com limite de simultaneidade.
+ * @param {boolean} fundo pedido da varredura — espera atrás de quem tem gente
+ *   olhando a tela.
+ */
+function pedir(url, opts = {}, { fundo = false } = {}) {
   if (estaBloqueado()) return Promise.reject(new Error('em pausa'));
 
   return new Promise((resolve, reject) => {
-    const disparar = () => {
+    const disparar = async () => {
       emVoo++;
-      fetch(url, opts)
-        .then(res => {
-          if (res.status === 403 || res.status === 429) marcarBloqueio();
-          resolve(res);
-        })
-        .catch(err => { marcarBloqueio(); reject(err); })
-        .finally(liberarVaga);
+      try {
+        const res = await comRetentativa(url, opts);
+        if (res.status === 403 || res.status === 429) marcarBloqueio();
+        else marcarSucesso();
+        resolve(res);
+      } catch (err) {
+        if (!foiCancelado(err) && ++falhasSeguidas >= FALHAS_ATE_PAUSAR) marcarBloqueio();
+        reject(err);
+      } finally {
+        liberarVaga();
+      }
     };
+    const cancelar = motivo => reject(new Error(motivo));
+
     if (emVoo < LIMITE_SIMULTANEO) disparar();
-    else espera.push(disparar);
+    else (fundo ? esperaFundo : espera).push({ disparar, cancelar, opts });
   });
 }
 
@@ -110,7 +186,37 @@ function readCache(key, ttl) {
   } catch { return null; }
 }
 function writeCache(key, value) {
-  try { localStorage.setItem(key, JSON.stringify({ t:Date.now(), v:value })); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify({ t:Date.now(), v:value }));
+  } catch {
+    // Cota estourada. O cache de trechos ganha uma chave por par de aeroportos
+    // e janela de datas, então ele cresce sem teto — e quando enche, NADA mais
+    // é gravado: toda busca volta a bater na API do zero e a pausa por volume
+    // vira rotina. Jogamos fora a metade mais velha e tentamos de novo.
+    if (!limparCacheAntigo()) return;
+    try { localStorage.setItem(key, JSON.stringify({ t:Date.now(), v:value })); } catch {}
+  }
+}
+
+/** Descarta a metade mais velha do nosso cache. @returns {boolean} se saiu algo. */
+function limparCacheAntigo() {
+  const nossas = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('ppi.ryanair.')) continue;
+      let t = 0;
+      try { t = JSON.parse(localStorage.getItem(k))?.t || 0; } catch {}
+      nossas.push({ k, t });
+    }
+  } catch { return false; }
+  if (!nossas.length) return false;
+
+  nossas.sort((a, b) => a.t - b.t);
+  for (const { k } of nossas.slice(0, Math.ceil(nossas.length / 2))) {
+    try { localStorage.removeItem(k); } catch {}
+  }
+  return true;
 }
 
 /* ------------------------------------------------------------ aeroportos - */
@@ -266,7 +372,7 @@ export function searchWindow(month, days) {
  * Busca as tarifas reais de ida e volta saindo de um aeroporto.
  * @returns {Promise<Map<string, object>>} IATA de chegada -> tarifa
  */
-export async function fetchFares(originIata, month, days, signal, destinos = null) {
+export async function fetchFares(originIata, month, days, signal, destinos = null, fundo = false) {
   const w = searchWindow(month, days);
   if (!w.valid) return new Map();
 
@@ -293,7 +399,7 @@ export async function fetchFares(originIata, month, days, signal, destinos = nul
 
   let rows;
   try {
-    const res = await pedir(`${FARES_URL}?${qs}`, { signal });
+    const res = await pedir(`${FARES_URL}?${qs}`, { signal }, { fundo });
     if (!res.ok) throw new Error('fares ' + res.status);
     rows = (await res.json()).fares || [];
   } catch { return new Map(); }
@@ -417,20 +523,20 @@ export async function sweepFares(originIata, destIatas, month, days, signal, aoL
   for (let i = 0; i < lista.length; i += LOTE_DESTINOS) {
     if (signal?.aborted || estaBloqueado()) break;
     const lote = lista.slice(i, i + LOTE_DESTINOS);
-    const novas = await fetchFares(originIata, month, days, signal, lote);
+    const novas = await fetchFares(originIata, month, days, signal, lote, true);
     for (const [k, v] of novas) todos.set(k, v);
     aoLote?.(novas, { feitos: Math.min(i + LOTE_DESTINOS, lista.length), total: lista.length });
   }
   return todos;
 }
 
-export async function routesFrom(iata, signal) {
+export async function routesFrom(iata, signal, fundo = false) {
   const key = CACHE_ROUTES + iata;
   const cached = readCache(key, TTL_ROUTES);
   if (cached) return cached;
 
   try {
-    const res = await pedir(ROUTES_URL + iata, { signal });
+    const res = await pedir(ROUTES_URL + iata, { signal }, { fundo });
     if (!res.ok) throw new Error('routes ' + res.status);
     const rows = await res.json();
     const list = rows
@@ -470,8 +576,10 @@ export async function legFare(from, to, month, days, signal, depoisDe = null, an
   if (inicio > fim) return null;
 
   const key = `ppi.ryanair.leg.v3.${from}.${to}.${month}.${depoisDe || inicio}.${antesDe || fim}`;
+  // `false` grava o "não existe voo aqui": sem esse sinal, um trecho sem voo
+  // fica indistinguível de cache vazio e é perguntado de novo a cada busca.
   const cached = readCache(key, TTL_FARES);
-  if (cached !== null) return cached;
+  if (cached !== null) return cached || null;
 
   const qs = new URLSearchParams({
     departureAirportIataCode: from,
@@ -501,7 +609,7 @@ export async function legFare(from, to, month, days, signal, depoisDe = null, an
         };
       }
     }
-    writeCache(key, melhor);
+    writeCache(key, melhor ?? false);
     return melhor;
   } catch { return null; }
 }
@@ -677,7 +785,7 @@ export async function findConnection(origin, dest, airports, month, days, signal
  * @returns {Promise<Map<string,string>>} IATA do destino -> IATA da escala
  */
 export async function reachableWithStop(originIata, signal, aoProgredir) {
-  const diretos = await routesFrom(originIata, signal);
+  const diretos = await routesFrom(originIata, signal, true);
   if (signal?.aborted || !diretos.length) return new Map();
 
   // 8 hubs em vez de 14: são as bases da companhia, as mais conectadas, e o
@@ -693,7 +801,7 @@ export async function reachableWithStop(originIata, signal, aoProgredir) {
   const LOTE = 4;
   for (let i = 0; i < hubs.length && !signal?.aborted; i += LOTE) {
     const grupo = hubs.slice(i, i + LOTE);
-    const listas = await Promise.all(grupo.map(h => routesFrom(h.iata, signal)));
+    const listas = await Promise.all(grupo.map(h => routesFrom(h.iata, signal, true)));
 
     listas.forEach((destinos, k) => {
       const hub = grupo[k];
