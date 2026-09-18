@@ -525,9 +525,94 @@ export async function sweepFares(originIata, destIatas, month, days, signal, aoL
     const lote = lista.slice(i, i + LOTE_DESTINOS);
     const novas = await fetchFares(originIata, month, days, signal, lote, true);
     for (const [k, v] of novas) todos.set(k, v);
-    aoLote?.(novas, { feitos: Math.min(i + LOTE_DESTINOS, lista.length), total: lista.length });
+    // `lote` vai junto para quem chamou saber o que foi PERGUNTADO, e não só
+    // o que respondeu: a diferença entre os dois é a lista de rotas que a malha
+    // anuncia mas que não voam na janela pedida.
+    aoLote?.(novas, { feitos: Math.min(i + LOTE_DESTINOS, lista.length), total: lista.length, lote });
   }
   return todos;
+}
+
+/* --------------------------------------------- ida de vários, em lote --- */
+const ONEWAY_URL  = 'https://services-api.ryanair.com/farfnd/v4/oneWayFares';
+const CACHE_ONEWAY = 'ppi.ryanair.ow.v1.';
+
+/**
+ * Preço de IDA de vários destinos a partir de um aeroporto, numa consulta só.
+ *
+ * `arrivalAirportIataCodes` no plural também funciona na consulta de só-ida —
+ * não está documentado em lugar nenhum, mas responde com a tarifa mais barata
+ * de CADA destino da lista. É a peça que faltava para duas coisas:
+ *
+ * · saber se uma rota REALMENTE voa no mês pedido. A lista de rotas da malha
+ *   não sabe de temporada: ela diz que Cagliari serve o Porto o ano inteiro,
+ *   quando de dezembro a março não há um voo sequer. Era isso que enchia o
+ *   mapa de estrelas vazias prometendo um voo direto que não existe;
+ *
+ * · pôr preço nos destinos com escala sem perguntar trecho por trecho. Uma
+ *   consulta por lote de quinze, em vez de seis por destino.
+ *
+ * @returns {Promise<Map<string, object>>} IATA de chegada -> trecho de ida
+ */
+export async function oneWaySweep(originIata, destIatas, month, days, signal, aoLote,
+                                  { fundo = true, de = null, ate = null } = {}) {
+  const w = searchWindow(month, days);
+  if (!w.valid) return new Map();
+
+  const inicio = de || w.outFrom;
+  const fim    = ate || (w.exata ? w.outTo : w.inTo);
+  const todos = new Map();
+  const lista = [...new Set(destIatas)].filter(i => i && i !== originIata);
+
+  for (let i = 0; i < lista.length; i += LOTE_DESTINOS) {
+    if (signal?.aborted || estaBloqueado()) break;
+    const lote = lista.slice(i, i + LOTE_DESTINOS);
+    const novas = await umLoteDeIda(originIata, lote, inicio, fim, signal, fundo);
+    for (const [k, v] of novas) todos.set(k, v);
+    aoLote?.(novas, lote);
+  }
+  return todos;
+}
+
+async function umLoteDeIda(originIata, lote, inicio, fim, signal, fundo) {
+  const key = `${CACHE_ONEWAY}${originIata}.${inicio}.${fim}.${[...lote].sort().join(',')}`;
+  const cached = readCache(key, TTL_FARES);
+  if (cached) return new Map(cached);
+
+  const qs = new URLSearchParams({
+    departureAirportIataCode: originIata,
+    arrivalAirportIataCodes: lote.join(','),
+    outboundDepartureDateFrom: inicio,
+    outboundDepartureDateTo: fim,
+    currency: 'EUR', limit: 20, offset: 0,
+  });
+
+  let rows;
+  try {
+    const res = await pedir(`${ONEWAY_URL}?${qs}`, { signal }, { fundo });
+    if (!res.ok) throw new Error('oneway ' + res.status);
+    rows = (await res.json()).fares || [];
+  } catch { return new Map(); }
+
+  const best = new Map();
+  for (const f of rows) {
+    const o = f.outbound;
+    const iata = o?.arrivalAirport?.iataCode;
+    const price = o?.price?.value;
+    if (!iata || !Number.isFinite(price)) continue;
+    if (best.has(iata) && best.get(iata).price <= price) continue;
+    best.set(iata, {
+      iata,
+      price: Math.round(price),
+      date: o.departureDate?.slice(0, 10),
+      city: o.arrivalAirport.city?.name || iata,
+      ...detalhesDoTrecho(o),
+      originIata,
+    });
+  }
+
+  writeCache(key, [...best]);
+  return best;
 }
 
 export async function routesFrom(iata, signal, fundo = false) {

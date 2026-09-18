@@ -628,6 +628,16 @@ a.opt.is-link:hover .opt-go{opacity:1}
 body.is-resizing{cursor:ns-resize;user-select:none}
 body.is-resizing .details-body{pointer-events:none}
 
+/* ================= teia de rotas em tempo real ========================= */
+/* Uma linha por ligação de voo confirmada no mês pedido. Fica discreta de
+   propósito: é pano de fundo do mapa, não concorre com as pílulas de preço. */
+.teia-linha{fill:none;stroke-linecap:round;pointer-events:none}
+.teia-direta{stroke:var(--origin);stroke-opacity:.42}
+.teia-escala{stroke:#63a8ff;stroke-opacity:.2;stroke-dasharray:3 6}
+/* com um destino aberto, a teia sai da frente junto com o resto do ruído */
+.map-wrap.foco .teia-linha{opacity:0}
+.teia-linha{transition:opacity .25s}
+
 /* ================= arco da rota ao passar o mouse ====================== */
 .rota-layer{
   position:absolute;inset:0;z-index:450;pointer-events:none;

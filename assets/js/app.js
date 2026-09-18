@@ -42,7 +42,8 @@ const state = {
   conexao: null,          // trajeto com escala do destino aberto
   filtro: 'todos',        // todos | confirmado (direto+escala) | direto
   viaEscala: new Map(),   // destino -> escala, pela malha da Ryanair
-  temVooDireto: new Set(), // destinos com rota direta de alguma saída
+  temVooDireto: new Set(), // destinos com voo direto CONFIRMADO no mês pedido
+  saidaDoDestino: new Map(), // destino -> { saida, apt, ida } que a API confirmou
   ignorarMove: false,     // true durante movimentos feitos pelo próprio código
   ignorarMoveAte: 0,      // até quando ignorar eventos de mapa (ms)
   enquadrado: null,       // destino cujo trajeto já foi enquadrado
@@ -97,6 +98,7 @@ function initMap() {
   window.addEventListener('resize', syncSize);
   window.addEventListener('orientationchange', syncSize);
 
+  layerTeia = L.layerGroup().addTo(map);   // por baixo: as linhas da malha
   layerDest = L.layerGroup().addTo(map);
   criarCamadaDeRota();
 }
@@ -358,6 +360,75 @@ function drawOrigin() {
   }).addTo(map);
 }
 
+/* ------------------------------------------------ teia de rotas --------- */
+/*
+   Cada linha é uma ligação de voo CONFIRMADA para o mês pedido, acesa no
+   instante em que a resposta chega. Primeiro os aeroportos daqui para onde há
+   voo direto; depois cada hub desses para onde ainda não havia ligação. A
+   malha vai se desenhando na ordem em que é descoberta, e o que fica na tela é
+   só o que existe de verdade — a teia é a prova visual de que nada passou em
+   branco.
+*/
+let layerTeia;
+const teiaFeitas = new Set();
+
+/** Arco suave entre dois pontos, em lat/lon, para acompanhar zoom e arrasto. */
+function arcoLatLng(a, b, n = 20) {
+  const dLat = b.lat - a.lat, dLon = b.lon - a.lon;
+  // ponto de controle deslocado na perpendicular: dá a barriga do arco
+  const cLat = (a.lat + b.lat) / 2 - dLon * 0.11;
+  const cLon = (a.lon + b.lon) / 2 + dLat * 0.11;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, u = 1 - t;
+    pts.push([
+      u * u * a.lat + 2 * u * t * cLat + t * t * b.lat,
+      u * u * a.lon + 2 * u * t * cLon + t * t * b.lon,
+    ]);
+  }
+  return pts;
+}
+
+/**
+ * Acende uma ligação na teia. Chamar duas vezes o mesmo par não faz nada, que
+ * é o que permite chamá-la de dentro de cada lote sem contar o que já veio.
+ */
+function acenderTeia(de, para, tipo) {
+  if (!layerTeia || !de || !para) return;
+  if (!Number.isFinite(de.lat) || !Number.isFinite(para.lat)) return;
+  const chave = `${de.iata || de.lat},${para.iata || para.lat}`;
+  if (teiaFeitas.has(chave)) return;
+  teiaFeitas.add(chave);
+
+  const linha = L.polyline(arcoLatLng(de, para), {
+    className: `teia-linha teia-${tipo}`,
+    interactive: false,
+    weight: tipo === 'direta' ? 1.4 : 1,
+  }).addTo(layerTeia);
+
+  // O traço cresce do começo ao fim, uma vez só. Depois a marcação é retirada
+  // do elemento: o Leaflet reescreve o caminho a cada zoom, e um dasharray
+  // preso ao comprimento antigo cortaria a linha no lugar errado.
+  const el = linha.getElement();
+  if (!el?.getTotalLength) return;
+  const comp = el.getTotalLength();
+  el.style.strokeDasharray = comp;
+  el.style.strokeDashoffset = comp;
+  void el.getBoundingClientRect();
+  el.style.transition = 'stroke-dashoffset .9s cubic-bezier(.32,.72,.3,1)';
+  el.style.strokeDashoffset = '0';
+  setTimeout(() => {
+    el.style.transition = '';
+    el.style.strokeDasharray = '';
+    el.style.strokeDashoffset = '';
+  }, 1000);
+}
+
+function limparTeia() {
+  layerTeia?.clearLayers();
+  teiaFeitas.clear();
+}
+
 function drawResults() {
   layerDest.clearLayers();
   markers.clear();
@@ -566,6 +637,7 @@ async function loadRealFares() {
   const signal = faresAbort.signal;
 
   setFareStatus('loading');
+  limparTeia();
   try {
     const airports = await RYA.loadAirports();
     if (signal.aborted) return;
@@ -583,8 +655,36 @@ async function loadRealFares() {
     if (!saidas.length) { state.realFares = new Map(); return setFareStatus('uncovered'); }
 
     const porIata = new Map(airports.map(a => [a.iata, a]));
+
+    /* O destino da nossa lista mais próximo de um aeroporto, até 130 km. */
+    const destinoDoAeroporto = apt => {
+      let melhor = null, menor = Infinity;
+      for (const d of DESTINATIONS) {
+        const km = distanciaSimples(apt, d);
+        if (km < menor) { menor = km; melhor = d; }
+      }
+      return menor <= 130 ? melhor : null;
+    };
+
+    /* Estrela vazia = "tem voo direto, abra para ver o preço".
+       Ela só entra depois que a API CONFIRMA que a rota voa no mês pedido.
+       Antes ela vinha da malha, que não sabe de temporada: a lista diz que
+       Cagliari serve o Porto o ano inteiro, e de dezembro a março não há um
+       voo sequer. O mapa prometia voo direto, a pessoa clicava, nada carregava
+       e o site mandava procurar no Google. */
     const diretos = new Set();
     state.temVooDireto = diretos;
+    state.saidaDoDestino = new Map();      // destino -> { saida, apt } que voa mesmo
+
+    const confirmarDireto = (apt, saida, ida = null) => {
+      const d = destinoDoAeroporto(apt);
+      if (!d) return null;
+      diretos.add(d.id);
+      const antes = state.saidaDoDestino.get(d.id);
+      if (!antes || saida.km < antes.saida.km) state.saidaDoDestino.set(d.id, { saida, apt, ida });
+      acenderTeia(saida, apt, 'direta');
+      return d;
+    };
 
     // Tarifas de todas as saídas, juntadas: para cada destino fica a mais
     // barata, junto com o aeroporto de onde ela parte.
@@ -595,6 +695,8 @@ async function loadRealFares() {
         if (!anterior || anterior.price > f.price) {
           acumulado.set(iata, { ...f, saida });
         }
+        const apt = porIata.get(iata);
+        if (apt) confirmarDireto(apt, saida);
       }
     };
 
@@ -606,50 +708,57 @@ async function loadRealFares() {
     };
 
     /* Um aeroporto de saída, do começo ao fim: descobre para onde ele voa,
-       marca os destinos que têm voo direto e busca o preço de todos eles. */
+       confirma quais dessas rotas voam mesmo no mês e busca o preço de todas. */
     async function varrerSaida(saida, ordem) {
-      // Quais destinos têm voo direto desta saída — pela MALHA, não pelas
-      // tarifas já conhecidas. O filtro "só voo direto" usava as tarifas, e a
-      // consulta geral traz só os 20 destinos mais baratos de cada aeroporto:
-      // o Porto tem voo direto de Cagliari e ficava escondido pelo filtro.
-      // As rotas ficam 30 dias em cache, então isto custa uma consulta só.
+      // A malha da companhia: para onde este aeroporto voa em alguma época do
+      // ano. É o ponto de partida, não a resposta — fica 30 dias em cache, e
+      // por isso custa uma consulta só.
       const rotas = await RYA.routesFrom(saida.iata, signal, true);
       if (signal.aborted) return;
 
-      const uteis = [];
-      for (const rota of rotas) {
-        const apt = porIata.get(rota.iata);
-        if (!apt) continue;
-        let melhor = null, menor = Infinity;
-        for (const d of DESTINATIONS) {
-          const km = distanciaSimples(apt, d);
-          if (km < menor) { menor = km; melhor = d; }
-        }
-        if (melhor && menor <= 130) { diretos.add(melhor.id); uteis.push(rota.iata); }
-      }
-      search({ refit:false });                  // o filtro já enxerga esta saída
+      const uteis = rotas.map(r => r.iata).filter(i => {
+        const apt = porIata.get(i);
+        return apt && destinoDoAeroporto(apt);
+      });
       if (!uteis.length) return;
 
-      // Preço de TODOS os destinos desta saída, em lotes.
+      // Preço de ida e volta de TODOS esses destinos, em lotes.
       //
       // A consulta geral devolve só as 20 ofertas mais baratas de cada
       // aeroporto, mas Cagliari sozinha serve 42 rotas: metade dos destinos
-      // diretos ficava com estimativa. Buscar por país tampouco resolvia —
-      // essa consulta também corta em 20. O que resolve é pedir os destinos
-      // pelo nome: `arrivalAirportIataCodes` aceita uma lista, então partimos
-      // as rotas em lotes de 15 e juntamos as respostas. São 3 requisições por
-      // aeroporto e o mapa vai acendendo as estrelas a cada lote.
+      // diretos ficava com estimativa. O que resolve é pedir os destinos pelo
+      // nome — `arrivalAirportIataCodes` aceita uma lista —, então partimos as
+      // rotas em lotes de quinze e juntamos as respostas.
       const total = Math.ceil(uteis.length / RYA.LOTE_DESTINOS);
+      const semIdaEVolta = [];
       let feitos = 0;
 
-      await RYA.sweepFares(saida.iata, uteis, state.month, state.days, signal, novas => {
+      await RYA.sweepFares(saida.iata, uteis, state.month, state.days, signal, (novas, p) => {
         if (signal.aborted) return;
         feitos++;
         if (novas.size) { juntar(novas, saida); aplicar(); }
-        // depois do aplicar(), que também mexe no aviso
+        // O que foi perguntado e não respondeu: ou a rota não voa neste mês, ou
+        // voa mas não fecha ida e volta na duração pedida. A consulta de só-ida
+        // abaixo separa os dois casos — são coisas muito diferentes para quem
+        // está olhando o mapa.
+        for (const iata of p.lote) if (!novas.has(iata)) semIdaEVolta.push(iata);
         setFareStatus('varrendo', {
           feitos, total, saida: saida.iata, ordem, saidas: saidas.length,
         });
+      });
+      if (signal.aborted || !semIdaEVolta.length) return;
+
+      // Uma consulta por lote de quinze resolve o resto: quem responde VOA no
+      // mês (ganha a estrela vazia e a linha na teia, e o preço da volta é
+      // procurado quando a pessoa abrir o destino); quem não responde não tem
+      // voo nenhum nesta janela e não pode prometer nada.
+      await RYA.oneWaySweep(saida.iata, semIdaEVolta, state.month, state.days, signal, novas => {
+        if (signal.aborted || !novas.size) return;
+        for (const [iata, ida] of novas) {
+          const apt = porIata.get(iata);
+          if (apt) confirmarDireto(apt, saida, ida);
+        }
+        search({ refit:false });
       });
     }
 
@@ -673,47 +782,83 @@ async function loadRealFares() {
     if (signal.aborted) return;
     setFareStatus(acumulado.size ? 'ok' : 'none');
 
-    // Por último a rede de escalas, das duas saídas mais próximas: é a parte
-    // mais cara (oito consultas por saída) e a que menos gente olha, então ela
-    // só começa depois que todo preço direto já está na tela.
+    // Segunda camada: o que se alcança com uma escala. Só começa agora, com
+    // todo voo direto já na tela, porque é a parte mais cara.
     if (RYA.estaBloqueado()) return acompanharPausa();
-    const alcanceTotal = new Map();
-    for (const saida of saidas.slice(0, 2)) {
-      const alcance = await RYA.reachableWithStop(saida.iata, signal, parcial => {
-        for (const [k, v] of parcial) if (!alcanceTotal.has(k)) alcanceTotal.set(k, { hub:v, saida });
-        if (!signal.aborted) casarEscalas(alcanceTotal, airports);
-      });
-      if (signal.aborted) return;
-      for (const [k, v] of alcance) if (!alcanceTotal.has(k)) alcanceTotal.set(k, { hub:v, saida });
-      casarEscalas(alcanceTotal, airports);
-    }
+    await varrerEscalas(saidas, porIata, destinoDoAeroporto, signal);
   } catch {
     if (signal.aborted) return;
     if (RYA.estaBloqueado()) acompanharPausa(); else setFareStatus('none');
   }
 }
 
-/** Liga cada aeroporto alcançável com escala ao destino correspondente. */
-function casarEscalas(alcance, airports) {
-  const porIata = new Map(airports.map(a => [a.iata, a]));
-  const mapa = new Map();
+/**
+ * Segunda camada da teia: para onde se chega com uma escala.
+ *
+ * A malha diz quais hubs a origem alcança e o que cada hub alcança depois —
+ * isso é cache de 30 dias e não custa quase nada. O que faltava era saber se
+ * essas rotas voam no mês pedido, e é aí que a consulta de ida em lote entra:
+ * uma pergunta por quinze destinos, em vez de seis por destino.
+ *
+ * A ordem é a que a pessoa vê acontecer: confirma-se primeiro quais hubs têm
+ * voo de verdade saindo daqui, e só desses hubs se segue para o resto. Nenhum
+ * destino fica prometido sem alguém ter perguntado por ele.
+ */
+async function varrerEscalas(saidas, porIata, destinoDoAeroporto, signal) {
+  const mapa = new Map();                 // destino -> { hub, saida, apt, ida1, ida2 }
+  state.viaEscala = mapa;
 
-  for (const [iata, info] of alcance) {
-    const apt = porIata.get(iata);
-    if (!apt) continue;
-    let melhor = null, menor = Infinity;
-    for (const d of DESTINATIONS) {
-      const km = distanciaSimples(apt, d);
-      if (km < menor) { menor = km; melhor = d; }
+  for (const saida of saidas.slice(0, 2)) {
+    if (signal.aborted || RYA.estaBloqueado()) return;
+
+    const alcance = await RYA.reachableWithStop(saida.iata, signal);
+    if (signal.aborted) return;
+    if (!alcance.size) continue;
+
+    // Um lote de consultas por hub, e não por destino: agrupamos antes.
+    const porHub = new Map();
+    for (const [iata, hubIata] of alcance) {
+      const apt = porIata.get(iata);
+      const d = apt && destinoDoAeroporto(apt);
+      if (!d || state.temVooDireto.has(d.id) || mapa.has(d.id)) continue;
+      if (!porHub.has(hubIata)) porHub.set(hubIata, []);
+      porHub.get(hubIata).push(iata);
     }
-    if (melhor && menor <= 130 && !state.realFares.has(melhor.id)) {
-      // info = { hub, saida } — de onde parte e onde faz escala
-      mapa.set(melhor.id, info);
+    if (!porHub.size) continue;
+
+    // Primeiro trecho: quais desses hubs têm mesmo voo saindo daqui neste mês.
+    // Sem isto a teia desenharia a partir de um hub que não voa, e o destino do
+    // outro lado ganharia uma promessa que ninguém confirmou.
+    const ateOHub = await RYA.oneWaySweep(
+      saida.iata, [...porHub.keys()], state.month, state.days, signal, novas => {
+        if (signal.aborted) return;
+        for (const iata of novas.keys()) acenderTeia(saida, porIata.get(iata), 'direta');
+      });
+    if (signal.aborted) return;
+
+    // Segundo trecho: de cada hub confirmado, para onde dá para seguir.
+    for (const [hubIata, ida1] of ateOHub) {
+      if (signal.aborted || RYA.estaBloqueado()) return;
+      const hub = porIata.get(hubIata);
+      const destinos = porHub.get(hubIata);
+      if (!hub || !destinos?.length) continue;
+
+      setFareStatus('escalas', { hub: hubIata, achados: mapa.size });
+
+      await RYA.oneWaySweep(hubIata, destinos, state.month, state.days, signal, novas => {
+        if (signal.aborted || !novas.size) return;
+        for (const [iata, ida2] of novas) {
+          const apt = porIata.get(iata);
+          const d = apt && destinoDoAeroporto(apt);
+          if (!d || state.temVooDireto.has(d.id) || mapa.has(d.id)) continue;
+          mapa.set(d.id, { hub, saida, apt, ida1, ida2, precoIda: ida1.price + ida2.price });
+          acenderTeia(hub, apt, 'escala');
+        }
+        search({ refit:false });
+      });
     }
   }
-  state.viaEscala = mapa;
-  setFareStatus('ok');
-  search({ refit:false });
+  if (!signal.aborted) setFareStatus('ok');
 }
 
 /* haversine enxuto, só para casar aeroporto com cidade */
@@ -743,6 +888,9 @@ function setFareStatus(kind, progresso = null) {
                   ? `${progresso.saida} (${progresso.ordem} de ${progresso.saidas}) — ` +
                     `lote ${progresso.feitos} de ${progresso.total}`
                   : 'varrendo destinos'],
+    escalas:   [String(n), progresso?.hub
+                  ? `ligando a malha pelo ${progresso.hub} — ${progresso.achados} com escala`
+                  : 'ligando a malha das escalas'],
     pausa:     ['', `muitas consultas seguidas — voltamos em ${RYA.segundosDePausa()} s`],
     ok:        [String(n), `preços reais${saidas ? ' de ' + saidas : ''}`],
     uncovered: ['', 'sem voos Ryanair perto da sua origem — voos estimados'],
@@ -750,7 +898,8 @@ function setFareStatus(kind, progresso = null) {
   };
   const [num, label] = texts[kind] || texts.none;
   box.dataset.kind = kind;
-  $('.map-wrap')?.classList.toggle('buscando', kind === 'loading' || kind === 'varrendo');
+  $('.map-wrap')?.classList.toggle('buscando',
+    kind === 'loading' || kind === 'varrendo' || kind === 'escalas');
   box.innerHTML = num
     ? `<b>${num}</b><span>${esc(label)}</span>`
     : `<span>${esc(label)}</span>`;
@@ -889,7 +1038,7 @@ function clearDetails({ forcar = false } = {}) {
  */
 function textoSemConfirmado(r) {
   const valor = fmt(r.flight || r.airPP);
-  const buscando = ['loading', 'varrendo'].includes($('#fareStatus')?.dataset.kind);
+  const buscando = ['loading', 'varrendo', 'escalas'].includes($('#fareStatus')?.dataset.kind);
 
   if (r.voaDireto && buscando) {
     return `Este destino <b>tem voo direto</b> da companhia — estamos buscando o preço.
@@ -899,6 +1048,17 @@ function textoSemConfirmado(r) {
     return `A companhia <b>voa direto</b> para este destino, mas <b>não nos dias que você
             escolheu</b> — por isso o caminho ao lado tem escala. O valor de ${valor} no
             resumo é estimativa de planejamento.`;
+  }
+  // Quando a varredura achou ida mas não achou volta, sabemos exatamente o que
+  // existe — e dizer o dia e o preço é muito melhor que "não encontramos
+  // tarifa", que soa como falha nossa quando na verdade é a malha que não fecha
+  // a volta na duração pedida.
+  const ida = state.saidaDoDestino?.get(r.dest.id)?.ida;
+  if (r.voaDireto && ida?.price) {
+    return `Há <b>voo direto na ida</b> — ${esc(ida.from)} → ${esc(ida.to)} em
+            ${fmtDate(ida.date)}, a partir de <b>${fmt(ida.price)}</b>. O que não fecha é a
+            <b>volta dentro dos ${r.days} dias</b> pedidos; por isso o caminho ao lado tem
+            escala. O valor de ${valor} no resumo é estimativa.`;
   }
   if (r.voaDireto) {
     return `A companhia <b>tem a rota direta</b>, mas não encontramos tarifa para este
@@ -1312,13 +1472,26 @@ async function tentarVooDireto(r) {
   if (r.real || r.useGround || !state.airports.length) return false;
   if (RYA.estaBloqueado()) return false;
 
-  const destApt = RYA.nearestAirport(state.airports, r.dest, 130);
+  // O par de aeroportos que a varredura CONFIRMOU voar até aqui neste mês.
+  //
+  // Recalcular o aeroporto do destino aqui era uma armadilha: a varredura vai
+  // do aeroporto para a cidade mais próxima dele, e esta busca ia da cidade
+  // para o aeroporto mais próximo dela. Quando as duas contas discordavam — e
+  // discordam sempre que a cidade tem dois aeroportos no raio — o mapa
+  // prometia voo direto e o clique procurava noutro aeroporto, não achava nada
+  // e mandava a pessoa pesquisar no Google.
+  const confirmado = state.saidaDoDestino?.get(r.dest.id);
+  const destApt = confirmado?.apt || RYA.nearestAirport(state.airports, r.dest, 130);
   if (!destApt) return false;
 
-  // Todas as saídas, não só as duas primeiras: Cagliari é a terceira mais
-  // próxima de Olbia e é justamente ela que voa para o Porto. Conferir a rota
-  // é de graça (cache de 30 dias); só gasta consulta quando a rota existe.
-  for (const saida of state.originAirports) {
+  // A saída confirmada primeiro; as outras depois, porque outra pode estar
+  // mais barata. Conferir a rota é de graça (cache de 30 dias); só gasta
+  // consulta quando a rota existe.
+  const ordem = confirmado
+    ? [confirmado.saida, ...state.originAirports.filter(s => s.iata !== confirmado.saida.iata)]
+    : state.originAirports;
+
+  for (const saida of ordem) {
     if (saida.iata === destApt.iata) continue;
     const rotas = await RYA.routesFrom(saida.iata);      // cache de 30 dias
     if (!rotas.some(x => x.iata === destApt.iata)) continue;
