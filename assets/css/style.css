@@ -285,7 +285,18 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 }
 /* Os três avisos do mapa partem do mesmo canto: logo abaixo da barra
    superior e à direita da lateral, que agora flutuam sobre o mapa. */
-.map-stats{top:var(--mapa-topo);left:var(--mapa-esq);display:flex;gap:2px;padding:8px 4px}
+/* A pilha do canto: as caixas ficam em fluxo normal dentro dela, então o
+   tamanho de uma não pode mais tapar a outra. Larguras próprias, para a coluna
+   não esticar com o texto mais longo. */
+.map-pilha{
+  position:absolute;top:var(--mapa-topo);left:var(--mapa-esq);z-index:800;
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  max-width:min(340px, calc(100% - 24px));pointer-events:none;
+}
+.map-pilha > *{pointer-events:auto}
+.map-pilha [hidden]{display:none}
+
+.map-stats{position:static;display:flex;gap:2px;padding:8px 4px}
 .map-stats > div{display:flex;flex-direction:column;align-items:center;padding:0 12px;line-height:1.15}
 .map-stats > div + div{border-left:1px solid var(--line)}
 .map-stats b{font-size:17px;font-weight:700}
@@ -541,9 +552,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 
 /* caixa de status no mapa */
 .map-fare{
-  top:var(--mapa-topo);left:var(--mapa-esq);margin-top:58px;
+  position:static;
   display:flex;align-items:center;gap:8px;
-  padding:7px 11px;font-size:11.5px;color:var(--txt-dim);max-width:260px;
+  padding:7px 11px;font-size:11.5px;color:var(--txt-dim);max-width:280px;
 }
 .map-fare b{color:var(--origin);font-size:15px;font-weight:750}
 .map-fare[data-kind=loading]{color:var(--txt-faint)}
@@ -802,7 +813,7 @@ input[type=range].is-beyond::-webkit-slider-thumb{background:var(--txt-faint);bo
 
 /* dois botões de filtro no mapa */
 .map-filtros{
-  position:absolute;z-index:800;top:var(--mapa-topo);left:var(--mapa-esq);margin-top:104px;
+  position:static;
   display:flex;flex-direction:column;gap:7px;align-items:flex-start;
 }
 .map-filtros .map-gold{position:static;margin:0}
@@ -981,6 +992,8 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .dot-visto{color:var(--visto);background:none;font-size:10px;line-height:1}
 .tip-visto{color:var(--visto)}
 .perna-vista{border-left:2px solid var(--visto);padding-left:8px}
+.perna-vista.is-link{text-decoration:none}
+.perna-vista .perna-preco small{display:block;font-size:9.5px;font-weight:600;color:var(--visto);opacity:.85}
 .perna-vista .perna-preco{color:var(--visto)}
 .visto-link{
   display:inline-block;margin-top:6px;font-weight:700;font-size:12px;

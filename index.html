@@ -14,7 +14,7 @@
 
 <link rel="preconnect" href="https://basemaps.cartocdn.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="assets/css/style.css?v=64">
+<link rel="stylesheet" href="assets/css/style.css?v=65">
 
 <!-- ===== ANÚNCIOS =====
      O script precisa estar na página para o Google conseguir revisar o site.
@@ -170,15 +170,21 @@
   <main class="map-wrap">
     <div id="map" role="application" aria-label="Mapa de destinos"></div>
 
-    <div class="map-overlay map-stats" id="mapStats" hidden>
-      <div><b id="statFit">0</b><span>cabem no orçamento</span></div>
-      <div><b id="statTight">0</b><span>quase lá</span></div>
-      <div><b id="statOver">0</b><span>acima</span></div>
-    </div>
+    <!-- Uma pilha só, em fluxo normal. Antes os três eram posicionados com
+         deslocamentos fixos a partir do mesmo canto (0, 58px, 104px), e cada
+         um tinha de caber na altura que o seguinte lhe deixava. Bastou o aviso
+         das tarifas ganhar uma terceira linha para ele invadir os botões de
+         filtro e tapá-los. Empilhados, cada caixa empurra a de baixo. -->
+    <div class="map-pilha">
+      <div class="map-overlay map-stats" id="mapStats" hidden>
+        <div><b id="statFit">0</b><span>cabem no orçamento</span></div>
+        <div><b id="statTight">0</b><span>quase lá</span></div>
+        <div><b id="statOver">0</b><span>acima</span></div>
+      </div>
 
-    <div class="map-overlay map-fare" id="fareStatus" hidden></div>
+      <div class="map-overlay map-fare" id="fareStatus" hidden></div>
 
-    <div class="map-filtros" id="mapFiltros" hidden>
+      <div class="map-filtros" id="mapFiltros" hidden>
       <button type="button" class="map-gold" id="btnConfirmado" aria-pressed="false">
         <i>★</i><span>Só preço confirmado</span><b id="countConfirmado"></b>
       </button>
@@ -188,7 +194,8 @@
       <button type="button" class="map-limpar" id="btnLimparSelecao" hidden
               title="Voltar ao mapa sem seleção">
         <i>✕</i><span>Limpar seleção</span>
-      </button>
+        </button>
+      </div>
     </div>
 
     <div class="map-overlay map-legend">
@@ -257,6 +264,6 @@
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script type="module" src="assets/js/app.js?v=64"></script>
+<script type="module" src="assets/js/app.js?v=65"></script>
 </body>
 </html>

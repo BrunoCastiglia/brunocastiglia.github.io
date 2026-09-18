@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=64';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=64';
-import * as GEO from './data/geo.js?v=64';
-import { ligadosPorTerra } from './data/landmass.js?v=64';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=64';
-import * as FX from './fx.js?v=64';
-import * as P from './providers/index.js?v=64';
-import { bookingLinks } from './links.js?v=64';
-import * as RYA from './providers/ryanair.js?v=64';
-import * as OSM from './providers/osm-stays.js?v=64';
-import * as TP from './providers/travelpayouts.js?v=64';
-import { mountAllAds } from './ads.js?v=64';
+import { DESTINATIONS } from './data/destinations.js?v=65';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=65';
+import * as GEO from './data/geo.js?v=65';
+import { ligadosPorTerra } from './data/landmass.js?v=65';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=65';
+import * as FX from './fx.js?v=65';
+import * as P from './providers/index.js?v=65';
+import { bookingLinks } from './links.js?v=65';
+import * as RYA from './providers/ryanair.js?v=65';
+import * as OSM from './providers/osm-stays.js?v=65';
+import * as TP from './providers/travelpayouts.js?v=65';
+import { mountAllAds } from './ads.js?v=65';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -2297,6 +2297,11 @@ async function montarTrajetoriaVista(r, signal) {
   if (signal?.aborted || state.selected !== r.dest.id) return true;
 
   const href = TP.linkDaOferta(v);
+  /* Só é total quando a viagem fecha. Faltando a perna de ida, somar o resto
+     anunciava € 209 para um caminho que não leva a lugar nenhum — e o número
+     ainda por cima aparecia em destaque, ao lado do rótulo "trajetória
+     completa". */
+  const completa = !!(ida && volta);
   const total = (ida?.price || 0) + (volta?.price || 0) + v.p;
 
   /* O resumo lá em cima foi calculado com a perna genérica do mês; aqui temos
@@ -2323,9 +2328,10 @@ async function montarTrajetoriaVista(r, signal) {
 
   caixa.innerHTML = `
     <div class="conexao-head">
-      <span class="conexao-tag">trajetória completa</span>
-      <b>${fmt(total)}</b>
-      <small>${esc(saida.iata)} → ${esc(chegada.iata)} → ${esc(v.apt || r.dest.city)} · ${v.n} noites</small>
+      <span class="conexao-tag">${completa ? 'trajetória completa' : 'trajetória incompleta'}</span>
+      <b>${completa ? fmt(total) : '—'}</b>
+      <small>${esc(saida.iata)} → ${esc(chegada.iata)} → ${esc(v.apt || r.dest.city)} · ${v.n} noites${
+        completa ? '' : ' · falta um trecho, veja abaixo'}</small>
     </div>
 
     <p class="conexao-nota">
@@ -2346,12 +2352,19 @@ async function montarTrajetoriaVista(r, signal) {
       <b>2.</b> De ${esc(v.hub.city)} para ${esc(r.dest.city)}, ${fmtDate(v.ida)} → ${fmtDate(v.volta)},
       ${v.esc ? `${v.esc} escala${v.esc > 1 ? 's' : ''}` : 'direto'}:
     </p>
-    <div class="perna perna-vista">
-      <span class="perna-rota"><b>${esc(chegada.iata)}</b> → <b>${esc(v.apt || '')}</b>
-        <i class="perna-voo">${esc(String(v.cia || ''))}${esc(String(v.voo || ''))}</i></span>
-      <span class="perna-data">ida e volta · ${fmtDate(v.ida)} → ${fmtDate(v.volta)}</span>
-      <span class="perna-preco">${fmt(v.p)}</span>
-    </div>
+    ${(() => {
+      // As outras pernas são links e esta não era: ficava a única linha da
+      // trajetória em que o clique não fazia nada, bem no trecho principal.
+      const dentro = `
+        <span class="perna-rota"><b>${esc(chegada.iata)}</b> → <b>${esc(v.apt || '')}</b>
+          <i class="perna-voo">${esc(String(v.cia || ''))}${esc(String(v.voo || ''))}</i></span>
+        <span class="perna-data">ida e volta · ${fmtDate(v.ida)} → ${fmtDate(v.volta)}</span>
+        <span class="perna-preco">${fmt(v.p)}<small>${href ? 'conferir →' : ''}</small></span>`;
+      return href
+        ? `<a class="perna perna-vista is-link" href="${href}"
+              target="_blank" rel="noopener nofollow">${dentro}</a>`
+        : `<div class="perna perna-vista">${dentro}</div>`;
+    })()}
 
     ${volta ? `<p class="conexao-nota"><b>3.</b> E o retorno para casa, depois de
                  ${esc(r.dest.city)} devolver você a ${esc(v.hub.city)}:</p>
