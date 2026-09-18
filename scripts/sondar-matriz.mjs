@@ -5,9 +5,11 @@ const TOKEN = process.env.TRAVELPAYOUTS_TOKEN || process.env.TRAVELPAYOUTS || ''
 if (!TOKEN) { console.error('sem token'); process.exit(1); }
 
 const casos = [
-  ['LIS', 'OPO', '2026-11-10', '2026-11-17', 3],
-  ['CAG', 'BCN', '2026-11-10', '2026-11-17', 7],
-  ['GRU', 'SCL', '2026-11-10', '2026-11-17', 3],
+  ['MAD', 'BCN', '2026-11-10', '2026-11-17', 7],
+  ['LON', 'BCN', '2026-11-10', '2026-11-17', 7],
+  ['CDG', 'FCO', '2026-11-10', '2026-11-17', 7],
+  ['MIL', 'LIS', '2026-11-10', '2026-11-17', 7],
+  ['GRU', 'LIS', '2026-11-10', '2026-11-17', 7],
 ];
 
 for (const [origin, destination, depart_date, return_date, flexibility] of casos) {
