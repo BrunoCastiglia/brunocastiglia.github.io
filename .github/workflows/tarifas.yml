@@ -37,8 +37,12 @@ jobs:
 
       - name: Coletar tarifas
         env:
+          # Os dois nomes, porque o segredo pode ter sido criado de qualquer
+          # uma das formas. O que não existir chega vazio e é ignorado.
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          TRAVELPAYOUTS: ${{ secrets.TRAVELPAYOUTS }}
           TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          MARKER: ${{ vars.MARKER }}
         run: node scripts/coletar-tarifas.mjs
 
       - name: Publicar o que mudou

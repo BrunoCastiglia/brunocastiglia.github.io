@@ -27,8 +27,13 @@ import { DESTINATIONS } from '../assets/js/data/destinations.js';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SAIDA = join(RAIZ, 'assets', 'data', 'fares');
 
-const TOKEN  = process.env.TRAVELPAYOUTS_TOKEN;
-const MARKER = process.env.TRAVELPAYOUTS_MARKER || '';
+/* Dois nomes aceitos para o mesmo segredo. Não é desleixo: é que o nome do
+   segredo é escolhido na interface do GitHub, por uma pessoa, e obrigar um
+   nome exato só cria uma ida e volta a mais para descobrir que faltava um
+   sufixo. O marker não é segredo — ele aparece em toda URL de afiliado —,
+   então pode vir de segredo ou de variável, e a coleta funciona sem ele. */
+const TOKEN  = process.env.TRAVELPAYOUTS_TOKEN || process.env.TRAVELPAYOUTS || '';
+const MARKER = process.env.TRAVELPAYOUTS_MARKER || process.env.MARKER || '';
 
 const API = 'https://api.travelpayouts.com/aviasales/v3/prices_for_dates';
 
@@ -168,7 +173,7 @@ async function tarifasDoMes(origem, mes) {
 
 /* ------------------------------------------------------------------ main -- */
 if (!TOKEN) {
-  console.error('Falta TRAVELPAYOUTS_TOKEN no ambiente.');
+  console.error('Falta o token: defina TRAVELPAYOUTS_TOKEN (ou TRAVELPAYOUTS) nos segredos.');
   process.exit(1);
 }
 
