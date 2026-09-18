@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=56';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=56';
-import * as GEO from './data/geo.js?v=56';
-import { ligadosPorTerra } from './data/landmass.js?v=56';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=56';
-import * as FX from './fx.js?v=56';
-import * as P from './providers/index.js?v=56';
-import { bookingLinks } from './links.js?v=56';
-import * as RYA from './providers/ryanair.js?v=56';
-import * as OSM from './providers/osm-stays.js?v=56';
-import * as TP from './providers/travelpayouts.js?v=56';
-import { mountAllAds } from './ads.js?v=56';
+import { DESTINATIONS } from './data/destinations.js?v=58';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=58';
+import * as GEO from './data/geo.js?v=58';
+import { ligadosPorTerra } from './data/landmass.js?v=58';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=58';
+import * as FX from './fx.js?v=58';
+import * as P from './providers/index.js?v=58';
+import { bookingLinks } from './links.js?v=58';
+import * as RYA from './providers/ryanair.js?v=58';
+import * as OSM from './providers/osm-stays.js?v=58';
+import * as TP from './providers/travelpayouts.js?v=58';
+import { mountAllAds } from './ads.js?v=58';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -561,6 +561,35 @@ function desenharLinhaDaTeia(de, para, tipo) {
   }, 1000);
 }
 
+/**
+ * Retângulo dos destinos que cabem no orçamento — o que a pessoa veio ver.
+ *
+ * Fica vazio quando nada cabe; aí o mapa volta a enquadrar a teia, porque é
+ * melhor mostrar o alcance do que não mostrar nada.
+ */
+function limiteDoQueCabe() {
+  const cabem = state.results
+    .filter(r => r.verdict === 'fit')
+    .sort((a, b) => a.km - b.km);
+  if (cabem.length < 2) return null;
+
+  /* Os 85% mais perto, e não todos. Com € 200 dá para chegar a Bangkok por uma
+     tarifa achada num hub, e meia dúzia desses casos puxava o enquadramento
+     para o globo inteiro — os outros cento e dez destinos viravam um borrão em
+     cima da Europa. Os distantes continuam no mapa; só deixam de mandar no
+     zoom. */
+  const dentro = cabem.slice(0, Math.max(5, Math.ceil(cabem.length * 0.85)));
+
+  let b = null;
+  for (const r of dentro) {
+    const p = [r.dest.lat, r.dest.lon];
+    b = b ? b.extend(p) : L.latLngBounds([p, p]);
+  }
+  // A origem entra sempre: o mapa que não mostra de onde se sai perde o fio.
+  if (state.origin) b.extend([state.origin.lat, state.origin.lon]);
+  return b;
+}
+
 function limparTeia() {
   clearTimeout(apagarTimer);
   $('.map-wrap')?.classList.remove('teia-off');
@@ -639,12 +668,20 @@ function assentarTela() {
   if (!state.varreduraPronta || filaTeia.length) return;
 
   if (state.abrindo) {
-    // Um último enquadramento, agora que a teia está inteira. Sem ele o
-    // resultado dependia de quantos fios havia: o zoom só abre entre um lote e
-    // outro, com folga de 1,2 s, e uma teia curta — dezesseis fios saindo de
-    // São Paulo — acabava antes do segundo passo. O mapa parava no meio do
-    // caminho, mostrando um destino de dezesseis.
-    if (limiteTeia && !state.mapaDaPessoa) voarPara(limiteTeia, [60, 60], 7);
+    /* Um último enquadramento, agora que a teia está inteira. Sem ele o
+       resultado dependia de quantos fios havia: o zoom só abre entre um lote e
+       outro, com folga de 1,2 s, e uma teia curta acabava antes do segundo
+       passo, deixando o mapa parado no meio do caminho.
+
+       O alvo é o que CABE no orçamento, e não a teia toda. Desde que os hubs
+       passaram a alcançar o mundo inteiro, enquadrar a teia abria o mapa até o
+       globo e empilhava cem pinos num borrão em cima da Europa — a resposta
+       certa para "até onde a malha chega", e a errada para "para onde o meu
+       dinheiro me leva", que é a pergunta do site. */
+    if (!state.mapaDaPessoa) {
+      const alvo = limiteDoQueCabe() || limiteTeia;
+      if (alvo) voarPara(alvo, [60, 60], 7);
+    }
     state.abrindo = false;
     $('.map-wrap')?.classList.remove('abrindo');
   }
