@@ -44,7 +44,26 @@ const API = 'https://api.travelpayouts.com/aviasales/v3/prices_for_dates';
 const INTERVALO_MS = 700;
 
 const MESES = 6;        // a janela que o site oferece
-const POR_MES = 200;    // destinos guardados por mês, do mais barato para cima
+const POR_MES = 400;    // registros guardados por mês
+
+/* ------------------------------------------------------ faixas de duração --
+   O site pergunta quantos dias de viagem; a API responde com a tarifa mais
+   barata do mês, de qualquer duração. Saindo de São Paulo a mediana é de dez
+   noites e o máximo passa de quarenta — só 70 das 260 ofertas caíam na semana
+   que o site oferece por padrão. Mostrar €98 para o Rio quando esse preço é de
+   uma viagem de quinze dias é a mesma promessa que não se cumpre da estrela
+   vazia, e por isso guardamos a mais barata de CADA faixa.
+
+   Sai de graça: sem `unique=true` a mesma consulta devolve todas as variações
+   da rota, e nós é que escolhemos o que fica. Mesmo número de requisições. */
+const FAIXAS = [
+  { id:'curta',  min:1,  max:4  },   // fim de semana esticado
+  { id:'semana', min:5,  max:9  },   // o padrão do site é 7
+  { id:'quinze', min:10, max:16 },
+  { id:'longa',  min:17, max:60 },
+];
+
+const faixaDe = noites => FAIXAS.find(f => noites >= f.min && noites <= f.max)?.id || null;
 
 /* --------------------------------------------------------------- origens --
    Onde a Ryanair não chega é onde este arquivo faz diferença, então o Brasil
@@ -130,7 +149,9 @@ async function tarifasDoMes(origem, mes) {
     origin: origem,
     departure_at: mes,
     one_way: 'false',
-    unique: 'true',
+    // Sem `unique`: queremos TODAS as variações da rota para poder escolher a
+    // mais barata de cada faixa de duração. Com ele vinha uma só, de duração
+    // imprevisível.
     sorting: 'price',
     currency: 'eur',
     limit: '1000',
@@ -154,14 +175,27 @@ async function tarifasDoMes(origem, mes) {
   const corpo = await res.json();
   if (!corpo.success) throw new Error(corpo.error || 'resposta sem sucesso');
 
-  const linhas = [];
+  /* A mais barata de cada destino em cada faixa. A chave junta os dois. */
+  const melhores = new Map();
+
   for (const f of corpo.data || []) {
     const destino = String(f.destination || '').toUpperCase();
     if (!CONHECIDOS.has(destino)) continue;
     if (!Number.isFinite(f.price)) continue;
+    if (!f.departure_at || !f.return_at) continue;
 
-    linhas.push({
+    const noites = Math.round(
+      (new Date(f.return_at) - new Date(f.departure_at)) / 864e5);
+    const faixa = faixaDe(noites);
+    if (!faixa) continue;              // ida e volta no mesmo dia não é viagem
+
+    const chave = `${destino}.${faixa}`;
+    if (melhores.has(chave) && melhores.get(chave).p <= Math.round(f.price)) continue;
+
+    melhores.set(chave, {
       d: destino.toLowerCase(),               // id do destino no site
+      f: faixa,                               // faixa de duração
+      n: noites,                              // noites exatas desta oferta
       p: Math.round(f.price),                 // EUR, ida e volta
       apt: f.destination_airport || null,     // pode diferir do código da cidade
       cia: f.airline || null,
@@ -175,7 +209,7 @@ async function tarifasDoMes(origem, mes) {
     });
   }
 
-  linhas.sort((a, b) => a.p - b.p);
+  const linhas = [...melhores.values()].sort((a, b) => a.p - b.p);
   return linhas.slice(0, POR_MES);
 }
 
