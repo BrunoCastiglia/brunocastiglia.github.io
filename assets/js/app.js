@@ -2,17 +2,17 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=41';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=41';
-import * as GEO from './data/geo.js?v=41';
-import { ligadosPorTerra } from './data/landmass.js?v=41';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=41';
-import * as FX from './fx.js?v=41';
-import * as P from './providers/index.js?v=41';
-import { bookingLinks } from './links.js?v=41';
-import * as RYA from './providers/ryanair.js?v=41';
-import * as OSM from './providers/osm-stays.js?v=41';
-import { mountAllAds } from './ads.js?v=41';
+import { DESTINATIONS } from './data/destinations.js?v=42';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=42';
+import * as GEO from './data/geo.js?v=42';
+import { ligadosPorTerra } from './data/landmass.js?v=42';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=42';
+import * as FX from './fx.js?v=42';
+import * as P from './providers/index.js?v=42';
+import { bookingLinks } from './links.js?v=42';
+import * as RYA from './providers/ryanair.js?v=42';
+import * as OSM from './providers/osm-stays.js?v=42';
+import { mountAllAds } from './ads.js?v=42';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -454,7 +454,7 @@ function drenarTeia() {
   if (!filaTeia.length) {
     clearInterval(teiaTimer);
     teiaTimer = null;
-    if (state.varreduraPronta) fecharAbertura();
+    fecharAbertura();
     return;
   }
 
@@ -558,6 +558,8 @@ function desenharLinhaDaTeia(de, para, tipo) {
 }
 
 function limparTeia() {
+  clearTimeout(apagarTimer);
+  $('.map-wrap')?.classList.remove('teia-off');
   layerTeia?.clearLayers();
   layerSaidas?.clearLayers();
   teiaFeitas.clear();
@@ -608,10 +610,35 @@ function mostrarSaidas(saidas) {
 
 /** Fim da abertura: os preços voltam ao normal e o mapa para de se mexer. */
 function fecharAbertura() {
-  if (!state.abrindo) return;
-  state.abrindo = false;
-  $('.map-wrap')?.classList.remove('abrindo');
+  if (state.abrindo) {
+    state.abrindo = false;
+    $('.map-wrap')?.classList.remove('abrindo');
+  }
+  talvezApagarTeia();
 }
+
+/**
+ * Apaga a teia quando a busca acaba de verdade.
+ *
+ * Ela existe para mostrar a varredura acontecendo — de onde se sai, até onde
+ * se chega, anel por anel. Terminada a busca, vira risco atravessado por cima
+ * dos preços, que é o que a pessoa veio ler. Some com calma, um segundo depois
+ * da última linha, e o mapa volta a ser o mapa.
+ *
+ * Duas coisas precisam ter acabado, e elas acabam fora de ordem: a varredura
+ * (que descobre as ligações) e a fila de desenho (que as acende). Por isso a
+ * checagem mora aqui e é chamada das duas pontas — quem chegar por último é
+ * quem apaga. Antes, a fila esvaziar primeiro encerrava o temporizador e a
+ * teia ficava na tela para sempre.
+ *
+ * As linhas continuam na camada: mudar de mês refaz a busca e a teia volta.
+ */
+function talvezApagarTeia() {
+  if (!state.varreduraPronta || filaTeia.length) return;
+  clearTimeout(apagarTimer);
+  apagarTimer = setTimeout(() => $('.map-wrap')?.classList.add('teia-off'), 1000);
+}
+let apagarTimer;
 
 function drawResults() {
   layerDest.clearLayers();
@@ -987,8 +1014,11 @@ async function loadRealFares() {
     // Segunda camada: o que se alcança com uma escala. Só começa agora, com
     // todo voo direto já na tela, porque é a parte mais cara.
     if (RYA.estaBloqueado()) return acompanharPausa();
-    await varrerEscalas(saidas, porIata, destinoDoAeroporto, signal);
+    await varrerMalha(saidas, porIata, destinoDoAeroporto, signal);
     state.varreduraPronta = true;
+    if (signal.aborted) return;
+    setFareStatus(acumulado.size ? 'ok' : 'none');
+    fecharAbertura();
   } catch {
     if (signal.aborted) return;
     fecharAbertura();
@@ -997,72 +1027,119 @@ async function loadRealFares() {
 }
 
 /**
- * Segunda camada da teia: para onde se chega com uma escala.
+ * Varre a malha em ondas, que é como a pergunta realmente se desdobra:
+ * daqui dá para ir aonde — e de cada um daqueles lugares, aonde agora — e dos
+ * seguintes, até acabar o mapa.
  *
- * A malha diz quais hubs a origem alcança e o que cada hub alcança depois —
- * isso é cache de 30 dias e não custa quase nada. O que faltava era saber se
- * essas rotas voam no mês pedido, e é aí que a consulta de ida em lote entra:
- * uma pergunta por quinze destinos, em vez de seis por destino.
+ * Cada onda é um anel da teia. A primeira sai dos aeroportos de casa; a
+ * segunda sai dos lugares que a primeira alcançou, e não mais de casa; e assim
+ * por diante. Antes a teia só tinha dois anéis e todos os fios partiam de
+ * perto de mim, o que não é a busca que o site faz.
  *
- * A ordem é a que a pessoa vê acontecer: confirma-se primeiro quais hubs têm
- * voo de verdade saindo daqui, e só desses hubs se segue para o resto. Nenhum
- * destino fica prometido sem alguém ter perguntado por ele.
+ * O preço para nas duas primeiras ondas de propósito: voo direto e uma escala
+ * é o que o site sabe montar como trajeto. Da terceira em diante a teia mostra
+ * que dá para chegar, e o preço sai quando a pessoa abrir o destino — o que
+ * evita multiplicar consultas por um caminho que ninguém pediu.
  */
-async function varrerEscalas(saidas, porIata, destinoDoAeroporto, signal) {
-  const mapa = new Map();                 // destino -> { hub, saida, apt, ida1, ida2 }
-  state.viaEscala = mapa;
+async function varrerMalha(saidas, porIata, destinoDoAeroporto, signal) {
+  const escalas = new Map();              // destino -> { hub, saida, apt, ida1, ida2 }
+  state.viaEscala = escalas;
 
-  for (const saida of saidas.slice(0, 2)) {
-    if (signal.aborted || RYA.estaBloqueado()) return;
+  const porSaida = new Map(saidas.map(s => [s.iata, s]));
+  const casa = saidas.map(s => s.iata);
 
-    const alcance = await RYA.reachableWithStop(saida.iata, signal);
-    if (signal.aborted) return;
-    if (!alcance.size) continue;
+  await RYA.varrerRede(casa, signal, {
+    ondas: 4,
 
-    // Um lote de consultas por hub, e não por destino: agrupamos antes.
-    const porHub = new Map();
-    for (const [iata, hubIata] of alcance) {
-      const apt = porIata.get(iata);
-      const d = apt && destinoDoAeroporto(apt);
-      if (!d || state.temVooDireto.has(d.id) || mapa.has(d.id)) continue;
-      if (!porHub.has(hubIata)) porHub.set(hubIata, []);
-      porHub.get(hubIata).push(iata);
-    }
-    if (!porHub.size) continue;
+    // Uma linha por aeroporto alcançado, no momento em que ele é alcançado.
+    aoAresta: (deIata, paraIata, nivel) => {
+      const de = porIata.get(deIata), para = porIata.get(paraIata);
+      if (de && para) acenderTeia(de, para, nivel === 1 ? 'direta' : 'escala');
+    },
 
-    // Primeiro trecho: quais desses hubs têm mesmo voo saindo daqui neste mês.
-    // Sem isto a teia desenharia a partir de um hub que não voa, e o destino do
-    // outro lado ganharia uma promessa que ninguém confirmou.
-    const ateOHub = await RYA.oneWaySweep(
-      saida.iata, [...porHub.keys()], state.month, state.days, signal, novas => {
-        if (signal.aborted) return;
-        for (const iata of novas.keys()) acenderTeia(saida, porIata.get(iata), 'direta');
+    aoOnda: async (nivel, alcance, novos) => {
+      if (signal.aborted) return;
+      setFareStatus('ondas', { nivel, alcance: alcance.size, novos: novos.length });
+      search({ refit:false });
+
+      if (nivel !== 2 || !novos.length) return;
+      await precoDeUmaEscala(novos, alcance, {
+        porIata, porSaida, destinoDoAeroporto, escalas, signal,
       });
-    if (signal.aborted) return;
+    },
+  });
+}
 
-    // Segundo trecho: de cada hub confirmado, para onde dá para seguir.
-    for (const [hubIata, ida1] of ateOHub) {
-      if (signal.aborted || RYA.estaBloqueado()) return;
-      const hub = porIata.get(hubIata);
-      const destinos = porHub.get(hubIata);
-      if (!hub || !destinos?.length) continue;
+/**
+ * Preço dos destinos que se alcançam com UMA escala.
+ *
+ * Agrupa por hub antes de perguntar: uma consulta por lote de quinze destinos
+ * do mesmo hub, em vez de seis consultas por destino. E confirma o primeiro
+ * trecho antes do segundo — sem isso a teia prometeria uma escala num hub que
+ * não tem voo saindo daqui neste mês.
+ */
+async function precoDeUmaEscala(novos, alcance, ctx) {
+  const { porIata, porSaida, destinoDoAeroporto, escalas, signal } = ctx;
 
-      setFareStatus('escalas', { hub: hubIata, achados: mapa.size });
-
-      await RYA.oneWaySweep(hubIata, destinos, state.month, state.days, signal, novas => {
-        if (signal.aborted || !novas.size) return;
-        for (const [iata, ida2] of novas) {
-          const apt = porIata.get(iata);
-          const d = apt && destinoDoAeroporto(apt);
-          if (!d || state.temVooDireto.has(d.id) || mapa.has(d.id)) continue;
-          mapa.set(d.id, { hub, saida, apt, ida1, ida2, precoIda: ida1.price + ida2.price });
-          acenderTeia(hub, apt, 'escala');
-        }
-        search({ refit:false });
-      });
-    }
+  const porHub = new Map();
+  for (const iata of novos) {
+    const apt = porIata.get(iata);
+    const d = apt && destinoDoAeroporto(apt);
+    if (!d || state.temVooDireto.has(d.id) || escalas.has(d.id)) continue;
+    const hubIata = alcance.get(iata)?.via;
+    if (!hubIata) continue;
+    if (!porHub.has(hubIata)) porHub.set(hubIata, []);
+    porHub.get(hubIata).push(iata);
   }
-  if (!signal.aborted) setFareStatus('ok');
+  if (!porHub.size) return;
+
+  // De qual aeroporto de casa se chega a cada hub. A malha da onda 1 já
+  // respondeu isso e está em cache, então é de graça.
+  const casaDoHub = new Map();
+  for (const [iata, saida] of porSaida) {
+    const rotas = await RYA.routesFrom(iata, signal, true);
+    if (signal.aborted) return;
+    for (const r of rotas) if (!casaDoHub.has(r.iata)) casaDoHub.set(r.iata, saida);
+  }
+
+  // Primeiro trecho: quais hubs têm mesmo voo saindo daqui neste mês.
+  const porCasa = new Map();
+  for (const hubIata of porHub.keys()) {
+    const saida = casaDoHub.get(hubIata);
+    if (!saida) continue;
+    if (!porCasa.has(saida.iata)) porCasa.set(saida.iata, []);
+    porCasa.get(saida.iata).push(hubIata);
+  }
+
+  const ida1PorHub = new Map();
+  for (const [saidaIata, hubs] of porCasa) {
+    if (signal.aborted || RYA.estaBloqueado()) return;
+    const saida = porSaida.get(saidaIata);
+    const achadas = await RYA.oneWaySweep(saidaIata, hubs, state.month, state.days, signal);
+    for (const [hubIata, ida1] of achadas) ida1PorHub.set(hubIata, { ida1, saida });
+  }
+  if (signal.aborted) return;
+
+  // Segundo trecho: de cada hub confirmado, para onde dá para seguir.
+  for (const [hubIata, { ida1, saida }] of ida1PorHub) {
+    if (signal.aborted || RYA.estaBloqueado()) return;
+    const hub = porIata.get(hubIata);
+    const destinos = porHub.get(hubIata);
+    if (!hub || !destinos?.length) continue;
+
+    setFareStatus('escalas', { hub: hubIata, achados: escalas.size });
+
+    await RYA.oneWaySweep(hubIata, destinos, state.month, state.days, signal, novas => {
+      if (signal.aborted || !novas.size) return;
+      for (const [iata, ida2] of novas) {
+        const apt = porIata.get(iata);
+        const d = apt && destinoDoAeroporto(apt);
+        if (!d || state.temVooDireto.has(d.id) || escalas.has(d.id)) continue;
+        escalas.set(d.id, { hub, saida, apt, ida1, ida2, precoIda: ida1.price + ida2.price });
+      }
+      search({ refit:false });
+    });
+  }
 }
 
 /* haversine enxuto, só para casar aeroporto com cidade */
@@ -1092,6 +1169,9 @@ function setFareStatus(kind, progresso = null) {
                   ? `${progresso.saida} (${progresso.ordem} de ${progresso.saidas}) — ` +
                     `lote ${progresso.feitos} de ${progresso.total}`
                   : 'varrendo destinos'],
+    ondas:     [String(n), progresso
+                  ? `onda ${progresso.nivel} — ${progresso.alcance} aeroportos na teia`
+                  : 'abrindo a malha em ondas'],
     escalas:   [String(n), progresso?.hub
                   ? `ligando a malha pelo ${progresso.hub} — ${progresso.achados} com escala`
                   : 'ligando a malha das escalas'],
@@ -1103,7 +1183,7 @@ function setFareStatus(kind, progresso = null) {
   const [num, label] = texts[kind] || texts.none;
   box.dataset.kind = kind;
   $('.map-wrap')?.classList.toggle('buscando',
-    kind === 'loading' || kind === 'varrendo' || kind === 'escalas');
+    ['loading', 'varrendo', 'escalas', 'ondas'].includes(kind));
   box.innerHTML = num
     ? `<b>${num}</b><span>${esc(label)}</span>`
     : `<span>${esc(label)}</span>`;
@@ -1242,7 +1322,7 @@ function clearDetails({ forcar = false } = {}) {
  */
 function textoSemConfirmado(r) {
   const valor = fmt(r.flight || r.airPP);
-  const buscando = ['loading', 'varrendo', 'escalas'].includes($('#fareStatus')?.dataset.kind);
+  const buscando = ['loading', 'varrendo', 'escalas', 'ondas'].includes($('#fareStatus')?.dataset.kind);
 
   if (r.voaDireto && buscando) {
     return `Este destino <b>tem voo direto</b> da companhia — estamos buscando o preço.

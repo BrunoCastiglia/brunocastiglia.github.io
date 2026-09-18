@@ -17,8 +17,8 @@
      é silenciosa e o site volta sozinho para a estimativa.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=41';
-import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=41';
+import { distanceKm } from '../engine.js?v=42';
+import { ligadosPorTerra, massaDeTerra } from '../data/landmass.js?v=42';
 
 const AIRPORTS_URL = 'https://www.ryanair.com/api/views/locate/5/airports/en/active';
 const FARES_URL    = 'https://services-api.ryanair.com/farfnd/v4/roundTripFares';
@@ -859,46 +859,56 @@ export async function findConnection(origin, dest, airports, month, days, signal
 }
 
 /**
- * Destinos alcançáveis a partir da origem com **uma escala**.
+ * Varre a malha em ondas, a partir dos aeroportos de casa.
  *
- * Para o filtro do mapa precisamos saber isso de antemão, sem esperar o clique
- * em cada destino. O caminho é: rotas da origem (1 consulta) dão os hubs; as
- * rotas de cada hub dão o alcance total. Limitamos a 14 hubs — priorizando as
- * bases da companhia, que são as mais conectadas — para não disparar cem
- * requisições num aeroporto grande.
+ * Onda 1: para onde dá para ir daqui. Onda 2: e de cada um desses lugares,
+ * para onde dá para ir agora. Onda 3: e daqueles. E assim até não sobrar
+ * aeroporto novo — na Ryanair são 224, e a terceira onda já alcança quase
+ * todos. É a busca que a pessoa faria à mão, feita pelo site.
  *
- * @returns {Promise<Map<string,string>>} IATA do destino -> IATA da escala
+ * O custo é uma consulta de rotas por aeroporto, e elas ficam 30 dias em
+ * cache: a malha inteira sai em 224 requisições UMA vez por mês, e em nenhuma
+ * nas visitas seguintes. O ritmo devagar não é enfeite — é o que mantém a
+ * companhia respondendo, e é por isso que a teia leva o tempo que leva.
+ *
+ * `aoAresta` só recebe as arestas que chegam a um aeroporto INÉDITO: uma linha
+ * por aeroporto alcançado, 224 no total. A malha completa seriam três mil
+ * linhas e um mapa ilegível.
+ *
+ * @returns {Promise<Map<string,{nivel:number, via:string}>>} iata -> como se chega
  */
-export async function reachableWithStop(originIata, signal, aoProgredir) {
-  const diretos = await routesFrom(originIata, signal, true);
-  if (signal?.aborted || !diretos.length) return new Map();
-
-  // 8 hubs em vez de 14: são as bases da companhia, as mais conectadas, e o
-  // ganho de alcance das últimas seis não compensava seis consultas a mais por
-  // aeroporto de saída.
-  const hubs = [...diretos]
-    .sort((a, b) => (b.base === true) - (a.base === true))
-    .slice(0, 8);
-
+export async function varrerRede(origens, signal, {
+  ondas = 4, teto = 300, aoAresta, aoOnda,
+} = {}) {
+  const visitados = new Set(origens);
   const alcance = new Map();
-  const diretosSet = new Set(diretos.map(d => d.iata));
+  let fronteira = origens.map(iata => ({ iata, base:true }));
 
-  const LOTE = 4;
-  for (let i = 0; i < hubs.length && !signal?.aborted; i += LOTE) {
-    const grupo = hubs.slice(i, i + LOTE);
-    const listas = await Promise.all(grupo.map(h => routesFrom(h.iata, signal, true)));
+  for (let nivel = 1; nivel <= ondas && fronteira.length; nivel++) {
+    const proxima = [];
 
-    listas.forEach((destinos, k) => {
-      const hub = grupo[k];
-      for (const d of destinos) {
-        if (d.iata === originIata) continue;
-        if (diretosSet.has(d.iata)) continue;        // já tem voo direto
-        if (!alcance.has(d.iata)) alcance.set(d.iata, hub.iata);
+    for (const atual of fronteira) {
+      if (signal?.aborted || estaBloqueado()) return alcance;
+      if (visitados.size >= teto) break;
+
+      const rotas = await routesFrom(atual.iata, signal, true);
+      for (const r of rotas) {
+        if (visitados.has(r.iata)) continue;
+        visitados.add(r.iata);
+        alcance.set(r.iata, { nivel, via: atual.iata });
+        proxima.push(r);
+        aoAresta?.(atual.iata, r.iata, nivel);
       }
-    });
-    aoProgredir?.(alcance);
-  }
+    }
 
+    // As bases voam todo dia e para muito mais lugares. Visitá-las primeiro faz
+    // a onda seguinte revelar mais malha com menos consultas — e, se a busca
+    // for interrompida no meio, o que já se sabe é a parte que importa.
+    proxima.sort((a, b) => (b.base === true) - (a.base === true));
+
+    await aoOnda?.(nivel, alcance, proxima.map(r => r.iata));
+    fronteira = proxima;
+  }
   return alcance;
 }
 

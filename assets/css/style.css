@@ -634,15 +634,20 @@ body.is-resizing .details-body{pointer-events:none}
 .teia-linha{fill:none;stroke-linecap:round;pointer-events:none}
 .teia-direta{stroke:var(--origin);stroke-opacity:.42}
 .teia-escala{stroke:#63a8ff;stroke-opacity:.2;stroke-dasharray:3 6}
-/* com um destino aberto, a teia sai da frente junto com o resto do ruído */
-.map-wrap.foco .teia-linha{opacity:0}
-.teia-linha{transition:opacity .25s}
+/* Some com um destino aberto, e de vez quando a busca acaba: a teia cumpriu o
+   papel de mostrar a varredura acontecendo e passaria a atrapalhar a leitura
+   dos preços. Quem apaga é `stroke-opacity`, e não `opacity`: num <path> do
+   Leaflet é essa a propriedade que pinta a linha — é com ela que as regras
+   acima dão o tom de cada tipo de fio, e o `opacity` do elemento não pegava. */
+.map-wrap.foco .teia-linha,
+.map-wrap.teia-off .teia-linha{stroke-opacity:0}
+.teia-linha{transition:stroke-opacity 1.1s ease-out}
 
 /* ===================== abertura: aeroportos de saída ==================== */
 /* Enquanto a teia se desenha, os preços recuam: o que a pessoa precisa ver é
    de onde ela sai e até onde a malha chega. No fim eles voltam ao normal. */
 .map-wrap.abrindo .pin:not(.pin-origin){opacity:.22}
-.pin, .teia-linha{transition:opacity .45s}
+.pin{transition:opacity .45s}
 
 .apt-pin{
   position:absolute;left:0;top:0;transform:translate(-50%,-50%);
