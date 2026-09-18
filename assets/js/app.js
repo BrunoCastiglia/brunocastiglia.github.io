@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=49';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=49';
-import * as GEO from './data/geo.js?v=49';
-import { ligadosPorTerra } from './data/landmass.js?v=49';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=49';
-import * as FX from './fx.js?v=49';
-import * as P from './providers/index.js?v=49';
-import { bookingLinks } from './links.js?v=49';
-import * as RYA from './providers/ryanair.js?v=49';
-import * as OSM from './providers/osm-stays.js?v=49';
-import * as TP from './providers/travelpayouts.js?v=49';
-import { mountAllAds } from './ads.js?v=49';
+import { DESTINATIONS } from './data/destinations.js?v=50';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=50';
+import * as GEO from './data/geo.js?v=50';
+import { ligadosPorTerra } from './data/landmass.js?v=50';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=50';
+import * as FX from './fx.js?v=50';
+import * as P from './providers/index.js?v=50';
+import { bookingLinks } from './links.js?v=50';
+import * as RYA from './providers/ryanair.js?v=50';
+import * as OSM from './providers/osm-stays.js?v=50';
+import * as TP from './providers/travelpayouts.js?v=50';
+import { mountAllAds } from './ads.js?v=50';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -689,7 +689,8 @@ function drawResults() {
            ? '<br><span class="tip-direto">☆ tem voo direto — abra para ver o preço</span>'
            : r.visto && !r.useGround
              ? `<br><span class="tip-visto">◆ ${fmt(r.visto.p)} visto há pouco —
-                 ${r.visto.n} noites, não é cotação</span>`
+                 ${r.visto.n} noites, saindo de ${esc(r.visto.originIata || state.vistosDe?.origem?.iata || '')},
+                 não é cotação</span>`
              : '<br><span class="tip-est">valor estimado</span>'}`,
       { direction:'top', offset:[0,-14], className:'dest-tip' },
     );

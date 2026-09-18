@@ -21,7 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=49';
+import { distanceKm } from '../engine.js?v=50';
+import { ligadosPorTerra } from '../data/landmass.js?v=50';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -70,12 +71,16 @@ export async function origemMaisProxima(ponto) {
   const indice = await carregarIndice();
   if (!indice?.origens?.length || !ponto) return null;
 
-  let melhor = null, menor = Infinity;
-  for (const o of indice.origens) {
-    const km = distanceKm(ponto, o);
-    if (km < menor) { menor = km; melhor = o; }
-  }
-  return menor <= RAIO_KM ? { ...melhor, km: Math.round(menor) } : null;
+  const perto = indice.origens
+    .map(o => ({ ...o, km: Math.round(distanceKm(ponto, o)) }))
+    .filter(o => o.km <= RAIO_KM)
+    // Só o que se alcança por terra. Quem está em Olbia não "sai de Roma":
+    // são 270 km com o mar Tirreno no meio, e oferecer tarifa de lá é a mesma
+    // promessa falsa da estrela vazia, agora com um ferry escondido dentro.
+    .filter(o => ligadosPorTerra(ponto, o))
+    .sort((a, b) => a.km - b.km);
+
+  return perto[0] || null;
 }
 
 /** O arquivo de uma origem, baixado uma vez por sessão. */
