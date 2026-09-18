@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=54';
-import { ligadosPorTerra } from '../data/landmass.js?v=54';
+import { distanceKm } from '../engine.js?v=56';
+import { ligadosPorTerra } from '../data/landmass.js?v=56';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -63,11 +63,32 @@ function carregarIndice() {
 }
 
 /**
- * A origem colhida mais próxima de um ponto, dentro do raio.
+ * Todas as origens colhidas, da mais perto para a mais longe.
+ *
+ * Antes isto devolvia UMA — a mais próxima — e era pouco: de Nuoro a mais
+ * próxima é Roma, mas a Ryanair também leva a Barcelona, Madri e Milão por
+ * trocados, e de lá saem voos intercontinentais que Roma não tem ou tem mais
+ * caro. Escolher o hub pela distância é escolher pelo critério errado; quem
+ * decide é o preço somado das duas pernas, destino a destino.
  *
  * São 41 aeroportos no mundo, e não a malha inteira: colher todos seria um
- * repositório impraticável. Fora do raio devolvemos nada em vez de oferecer
- * uma tarifa de São Paulo para quem está em Manaus.
+ * repositório impraticável. Quem chama é que decide até onde vale olhar.
+ */
+export async function origensColhidas(ponto) {
+  const indice = await carregarIndice();
+  if (!indice?.origens?.length || !ponto) return [];
+
+  return indice.origens
+    .map(o => ({
+      ...o,
+      km: Math.round(distanceKm(ponto, o)),
+      porTerra: ligadosPorTerra(ponto, o),
+    }))
+    .sort((a, b) => a.km - b.km);
+}
+
+/**
+ * A origem colhida mais próxima de um ponto, dentro do raio.
  */
 export async function origemMaisProxima(ponto) {
   const indice = await carregarIndice();
@@ -112,11 +133,8 @@ async function carregarOrigem(iata) {
  * @param {number} days   dias de viagem pedidos
  * @returns {Promise<{origem:object, faixa:string, tarifas:Map<string,object>}|null>}
  */
-export async function tarifasVistas(ponto, month, days) {
-  const origem = await origemMaisProxima(ponto);
-  if (!origem) return null;
-
-  const dados = await carregarOrigem(origem.iata);
+export async function tarifasDe(iata, month, days) {
+  const dados = await carregarOrigem(iata);
   if (!dados?.meses) return null;
 
   // O ano é o mesmo critério do resto do site: mês já passado é do ano que vem.
@@ -138,7 +156,7 @@ export async function tarifasVistas(ponto, month, days) {
     if (!anterior || anterior.p > f.p) tarifas.set(f.d, f);
   }
 
-  return { origem, faixa, tarifas, atualizado: dados.atualizado };
+  return { faixa, tarifas, atualizado: dados.atualizado };
 }
 
 /**

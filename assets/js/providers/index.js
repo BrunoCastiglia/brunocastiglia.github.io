@@ -17,7 +17,7 @@
       chave ficaria exposta). Suba um proxy mínimo — uma função serverless na
       Vercel/Netlify em /api/flights — que guarda a chave e devolve o JSON.
 
-   3. Troque a linha abaixo para: export * from './amadeus.js?v=54'
+   3. Troque a linha abaixo para: export * from './amadeus.js?v=56'
 
    4. Como as funções viram assíncronas, o app já as aguarda com `await`.
 
@@ -27,4 +27,4 @@
      · Booking.com / Stay22      — afiliado de hospedagem
    ======================================================================== */
 
-export * from './estimates.js?v=54';
+export * from './estimates.js?v=56';

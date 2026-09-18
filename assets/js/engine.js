@@ -129,18 +129,11 @@ export function tripCost(origin, dest, opts) {
 
   /* A tarifa vista parte de um aeroporto que pode não ser o de casa — e quando
      ele fica do outro lado do mar, chegar até lá é um voo, não uma caminhada.
-     Somar só a tarifa de lá daria um orçamento que não se cumpre: é o site
-     dizendo "vá ao Rio por €1028" e escondendo a passagem até Roma.
-
-     `ateOHub` é esse trecho, já com preço. Sem ele a tarifa vista não entra na
-     conta: um número irreal é pior que a estimativa honesta que já havia. */
-  const ateOHub = opts.ateOHub || null;
-  const vistoBruto = !real && (opts.vistos?.get(dest.id) || null);
-  const precisaDeHub = vistoBruto && ateOHub?.necessario;
-  const visto = (precisaDeHub && !ateOHub.price) ? null : vistoBruto;
-  const extraHub = visto && precisaDeHub ? ateOHub.price : 0;
-
-  const airPP = real ? real.price : visto ? visto.p + extraHub : estimated;
+     Quem monta a tarifa já resolveu isso: `visto.total` é a soma das duas
+     pernas, e é sempre ele que entra na conta. Usar `visto.p` daria o site
+     dizendo "vá ao Rio por € 1028" e escondendo a passagem até Roma. */
+  const visto = !real && (opts.vistos?.get(dest.id) || null);
+  const airPP = real ? real.price : visto ? (visto.total ?? visto.p) : estimated;
   const ground = groundPriceEUR(km);
   const useGround = ground !== null && ground < airPP;
 
@@ -160,8 +153,6 @@ export function tripCost(origin, dest, opts) {
     hours: flightHours(km), stops: flightStops(km),
     season, useGround, airPP, groundPP: ground,
     real, visto, viaEscala, estimatedAirPP: estimated,
-    ateOHub: visto && extraHub ? ateOHub : null,
-    vistoSemCaminho: vistoBruto && !visto ? vistoBruto : null,
     voaDireto: !!(real || opts.temVooDireto?.has(dest.id)),
     flight, stay, total, left, verdict, mode: opts.mode || 'both',
     perDay: Math.round(total / days),
