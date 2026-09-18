@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=65';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=65';
-import * as GEO from './data/geo.js?v=65';
-import { ligadosPorTerra } from './data/landmass.js?v=65';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=65';
-import * as FX from './fx.js?v=65';
-import * as P from './providers/index.js?v=65';
-import { bookingLinks } from './links.js?v=65';
-import * as RYA from './providers/ryanair.js?v=65';
-import * as OSM from './providers/osm-stays.js?v=65';
-import * as TP from './providers/travelpayouts.js?v=65';
-import { mountAllAds } from './ads.js?v=65';
+import { DESTINATIONS } from './data/destinations.js?v=66';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=66';
+import * as GEO from './data/geo.js?v=66';
+import { ligadosPorTerra } from './data/landmass.js?v=66';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=66';
+import * as FX from './fx.js?v=66';
+import * as P from './providers/index.js?v=66';
+import { bookingLinks } from './links.js?v=66';
+import * as RYA from './providers/ryanair.js?v=66';
+import * as OSM from './providers/osm-stays.js?v=66';
+import * as TP from './providers/travelpayouts.js?v=66';
+import { mountAllAds } from './ads.js?v=66';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1593,7 +1593,7 @@ function textoSemConfirmado(r) {
       : hub.km > 60 ? ` partindo de ${esc(hub.city)} (${esc(hub.iata)}), a ${hub.km} km de você`
       : '';
     return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
-            últimos dias${saindo} — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
+            últimos dias${saindo} — ${esc(TP.vooPorExtenso(v.cia, v.voo))},
             ${quando}, ${v.n} noites${v.esc ? `, ${v.esc} escala${v.esc > 1 ? 's' : ''}` : ', direto'}.
             <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.
             ${(() => {
@@ -2357,7 +2357,8 @@ async function montarTrajetoriaVista(r, signal) {
       // trajetória em que o clique não fazia nada, bem no trecho principal.
       const dentro = `
         <span class="perna-rota"><b>${esc(chegada.iata)}</b> → <b>${esc(v.apt || '')}</b>
-          <i class="perna-voo">${esc(String(v.cia || ''))}${esc(String(v.voo || ''))}</i></span>
+          <i class="perna-voo">${esc(TP.vooPorExtenso(v.cia, v.voo))}${
+            TP.ehLowCost(v.cia) ? '<b class="selo-low">low cost</b>' : ''}</i></span>
         <span class="perna-data">ida e volta · ${fmtDate(v.ida)} → ${fmtDate(v.volta)}</span>
         <span class="perna-preco">${fmt(v.p)}<small>${href ? 'conferir →' : ''}</small></span>`;
       return href
@@ -2390,11 +2391,26 @@ function pernaVoo(p, rotulo, people) {
     <a class="perna is-link" href="${RYA.legBookingUrl(p, people)}"
        target="_blank" rel="noopener nofollow">
       <span class="perna-rota"><b>${esc(p.from)}</b> → <b>${esc(p.to)}</b>
-        <i class="perna-voo">${esc(p.flight || '')}</i></span>
+        <i class="perna-voo">${esc(nomeDoVoo(p.flight))}</i></span>
       <span class="perna-data">${rotulo} · ${fmtDataHora(p.depart)} → ${fmtHora(p.arrive)}
         ${p.minutos > 0 ? `· ${fmtDuracao(p.minutos)}` : ''}</span>
       <span class="perna-preco">${fmt(p.price)}<small>reservar →</small></span>
     </a>`;
+}
+
+/**
+ * "FR4323" vira "Ryanair 4323".
+ *
+ * A Ryanair devolve o número já com o prefixo colado; separamos as duas letras
+ * iniciais para achar a companhia. Se não reconhecermos o código, fica o que
+ * veio — melhor um código do que um nome errado.
+ */
+function nomeDoVoo(flight) {
+  const bruto = String(flight || '').trim();
+  const m = bruto.match(/^([A-Z0-9]{2})\s*(\d+)$/i);
+  if (!m) return bruto;
+  const nome = TP.nomeDaCompanhia(m[1].toUpperCase());
+  return nome === m[1].toUpperCase() ? bruto : `${nome} ${m[2]}`;
 }
 
 /**

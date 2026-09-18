@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=65';
-import { ligadosPorTerra } from '../data/landmass.js?v=65';
+import { distanceKm } from '../engine.js?v=66';
+import { ligadosPorTerra } from '../data/landmass.js?v=66';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -174,6 +174,47 @@ export function linkDaOferta(oferta) {
   const url = new URL(oferta.url, 'https://www.aviasales.com');
   if (marker) url.searchParams.set('marker', marker);
   return url.toString();
+}
+
+/* ------------------------------------------------------ companhias ------ */
+/*
+   A tela mostrava "W46217" e "TP1019". Quem viaja pouco não lê códigos IATA:
+   não dá para julgar um voo sem saber se é da Wizz Air ou da TAP, nem se é
+   low cost — o que muda o que está incluído na passagem e o que vai ser
+   cobrado à parte no balcão.
+*/
+let companhias = null;
+
+/** Carrega a lista uma vez por sessão. Falha em silêncio: fica o código. */
+export function carregarCompanhias() {
+  if (!companhias) {
+    companhias = fetch(BASE + 'airlines.json')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('airlines ' + r.status)))
+      .catch(() => ({}));
+  }
+  return companhias;
+}
+
+let porCodigo = {};
+carregarCompanhias().then(m => { porCodigo = m || {}; });
+
+/** Nome da companhia, ou o próprio código enquanto a lista não chegou. */
+export const nomeDaCompanhia = code => porCodigo[code]?.[0] || code || '';
+
+/** A companhia é low cost? Muda o que está incluído na passagem. */
+export const ehLowCost = code => porCodigo[code]?.[1] === 1;
+
+/**
+ * "Wizz Air 6217" em vez de "W46217".
+ *
+ * O número do voo vem colado ao código da companhia nas tarifas colhidas, e
+ * separado nas da Ryanair; esta função aceita os dois formatos.
+ */
+export function vooPorExtenso(cia, voo) {
+  const codigo = String(cia || '');
+  const numero = String(voo || '').replace(new RegExp('^' + codigo), '');
+  const nome = nomeDaCompanhia(codigo);
+  return numero ? `${nome} ${numero}` : nome;
 }
 
 /** Há quanto tempo estes preços foram colhidos, em horas. */

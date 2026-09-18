@@ -993,6 +993,11 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .tip-visto{color:var(--visto)}
 .perna-vista{border-left:2px solid var(--visto);padding-left:8px}
 .perna-vista.is-link{text-decoration:none}
+.selo-low{
+  margin-left:5px;padding:1px 5px;border-radius:4px;font-size:8.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.03em;
+  background:var(--accent-chip);color:var(--accent);
+}
 .perna-vista .perna-preco small{display:block;font-size:9.5px;font-weight:600;color:var(--visto);opacity:.85}
 .perna-vista .perna-preco{color:var(--visto)}
 .visto-link{

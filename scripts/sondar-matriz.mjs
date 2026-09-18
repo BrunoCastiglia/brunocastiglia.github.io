@@ -13,7 +13,7 @@ const casos = [
 for (const [origin, destination, depart_date, return_date, flexibility] of casos) {
   const qs = new URLSearchParams({
     origin, destination, depart_date, return_date,
-    flexibility: String(flexibility), limit: '10', currency: 'eur', show_to_affiliates: 'true',
+    flexibility: String(flexibility), limit: '7', currency: 'eur', show_to_affiliates: 'true',
   });
   const url = `https://api.travelpayouts.com/v2/prices/nearest-places-matrix?${qs}`;
   try {

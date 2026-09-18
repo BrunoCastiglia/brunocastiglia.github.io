@@ -36,6 +36,7 @@ const TOKEN  = process.env.TRAVELPAYOUTS_TOKEN || process.env.TRAVELPAYOUTS || '
 const MARKER = process.env.TRAVELPAYOUTS_MARKER || process.env.MARKER || '';
 
 const API = 'https://api.travelpayouts.com/aviasales/v3/prices_for_dates';
+const COMPANHIAS_URL = 'https://api.travelpayouts.com/data/en/airlines.json';
 
 /* Cem consultas por minuto é o teto que eles publicam para a API de links;
    não achei número para esta, então adotamos o mesmo e com folga. Uma de cada
@@ -217,6 +218,35 @@ async function tarifasDoMes(origem, mes) {
   return linhas.slice(0, POR_MES);
 }
 
+/**
+ * A lista de companhias, enxugada para o que a tela usa.
+ *
+ * O arquivo público tem 1.158 registros e 100 KB de traduções de nome em vinte
+ * idiomas. Guardamos código, nome e a marca de low cost: dá 30 KB e evita que
+ * o navegador baixe o resto para mostrar "Wizz Air" onde hoje aparece "W4".
+ *
+ * Não precisa de token — é arquivo aberto. Mora aqui junto com as tarifas
+ * porque é a mesma ideia: buscar na publicação, servir estático.
+ */
+async function colherCompanhias() {
+  try {
+    const res = await fetch(COMPANHIAS_URL, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const mapa = {};
+    for (const c of await res.json()) {
+      if (!c.code || !c.name) continue;
+      // `1` em vez de `true` e a ausência em vez de `false`: são 1.158 linhas,
+      // e cada byte economizado aqui é byte que ninguém baixa.
+      mapa[c.code] = c.is_lowcost ? [c.name, 1] : [c.name];
+    }
+    await writeFile(join(SAIDA, 'airlines.json'), JSON.stringify(mapa));
+    console.log(`Companhias: ${Object.keys(mapa).length} gravadas`);
+  } catch (err) {
+    console.warn(`! companhias: ${err.message} — a tela segue mostrando o código`);
+  }
+}
+
 /* ------------------------------------------------------------------ main -- */
 if (!TOKEN) {
   console.error('Falta o token: defina TRAVELPAYOUTS_TOKEN (ou TRAVELPAYOUTS) nos segredos.');
@@ -235,6 +265,7 @@ const meses = proximosMeses(MESES);
 console.log(`Coletando ${ORIGENS.length} origens × ${meses.length} meses (${meses[0]} a ${meses.at(-1)})`);
 
 await mkdir(SAIDA, { recursive: true });
+await colherCompanhias();
 
 const indice = [];
 let consultas = 0, falhas = 0;
@@ -275,7 +306,7 @@ if (!indice.length) {
 
 /* Origens que saíram da lista deixam arquivo órfão para trás; limpamos para o
    repositório não acumular tarifa velha que ninguém mais lê. */
-const vivos = new Set([...indice.map(o => `${o.iata}.json`), 'index.json']);
+const vivos = new Set([...indice.map(o => `${o.iata}.json`), 'index.json', 'airlines.json']);
 for (const nome of await readdir(SAIDA)) {
   if (!vivos.has(nome)) { await unlink(join(SAIDA, nome)); console.log(`  × removido ${nome}`); }
 }
