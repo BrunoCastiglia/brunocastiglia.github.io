@@ -980,6 +980,11 @@ a.perna.is-link:hover .perna-preco small{opacity:1}
 .pin.pin-visto{box-shadow:0 0 0 1.5px var(--visto-borda), 0 3px 10px rgba(0,0,0,.5)}
 .dot-visto{color:var(--visto);background:none;font-size:10px;line-height:1}
 .tip-visto{color:var(--visto)}
+.visto-link{
+  display:inline-block;margin-top:6px;font-weight:700;font-size:12px;
+  color:var(--visto);text-decoration:none;
+}
+.visto-link:hover{text-decoration:underline}
 .dot-star-vazia{color:rgba(255,210,74,.85)}
 .tip-direto{color:var(--gold);font-size:11px;opacity:.9}
 

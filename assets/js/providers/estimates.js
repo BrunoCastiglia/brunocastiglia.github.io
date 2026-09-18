@@ -9,7 +9,7 @@
    providers/index.js — basta implementar a mesma assinatura.
    ======================================================================== */
 
-import { flightSearch, bookingSearch, googleWeb } from '../links.js?v=51';
+import { flightSearch, bookingSearch, googleWeb } from '../links.js?v=52';
 
 const round = n => Math.round(n);
 

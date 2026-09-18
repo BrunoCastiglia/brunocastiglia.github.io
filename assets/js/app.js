@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=51';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=51';
-import * as GEO from './data/geo.js?v=51';
-import { ligadosPorTerra } from './data/landmass.js?v=51';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=51';
-import * as FX from './fx.js?v=51';
-import * as P from './providers/index.js?v=51';
-import { bookingLinks } from './links.js?v=51';
-import * as RYA from './providers/ryanair.js?v=51';
-import * as OSM from './providers/osm-stays.js?v=51';
-import * as TP from './providers/travelpayouts.js?v=51';
-import { mountAllAds } from './ads.js?v=51';
+import { DESTINATIONS } from './data/destinations.js?v=52';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=52';
+import * as GEO from './data/geo.js?v=52';
+import { ligadosPorTerra } from './data/landmass.js?v=52';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=52';
+import * as FX from './fx.js?v=52';
+import * as P from './providers/index.js?v=52';
+import { bookingLinks } from './links.js?v=52';
+import * as RYA from './providers/ryanair.js?v=52';
+import * as OSM from './providers/osm-stays.js?v=52';
+import * as TP from './providers/travelpayouts.js?v=52';
+import { mountAllAds } from './ads.js?v=52';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1439,7 +1439,17 @@ function textoSemConfirmado(r) {
     return `<b>${fmt(v.p)}</b> foi o mais barato que alguém encontrou para cá nos
             últimos dias${saindo} — ${esc(String(v.cia || ''))}${esc(String(v.voo || ''))},
             ${quando}, ${v.n} noites${v.esc ? `, ${v.esc} escala${v.esc > 1 ? 's' : ''}` : ', direto'}.
-            <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.`;
+            <b>Não é cotação</b>: não confirmamos que o lugar ainda existe por esse valor.
+            ${(() => {
+              // O link cai no resultado da busca com a rota e a data já dentro,
+              // e não numa busca em branco — é a diferença entre "veja você
+              // mesmo" e "está aqui, confira".
+              const href = TP.linkDaOferta(v);
+              return href
+                ? `<a class="visto-link" href="${href}" target="_blank" rel="noopener nofollow">
+                     conferir este voo no Aviasales →</a>`
+                : '';
+            })()}`;
   }
   return `Sem preço confirmado para esta rota. O valor de <b>${valor}</b>
           no resumo é estimativa de planejamento — confira na busca ao lado.`;

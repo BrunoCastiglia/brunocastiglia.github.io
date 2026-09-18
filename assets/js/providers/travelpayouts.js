@@ -21,8 +21,8 @@
    Brasil, do Chile ou de Angola só via estimativa até aqui.
    ======================================================================== */
 
-import { distanceKm } from '../engine.js?v=51';
-import { ligadosPorTerra } from '../data/landmass.js?v=51';
+import { distanceKm } from '../engine.js?v=52';
+import { ligadosPorTerra } from '../data/landmass.js?v=52';
 
 const BASE = 'assets/data/fares/';
 const RAIO_KM = 320;          // até onde faz sentido chamar um aeroporto de "o seu"
@@ -48,6 +48,7 @@ export const nomeDaFaixa = id => ({
 }[id] || '');
 
 let indicePromise = null;
+let marker = '';                     // ID de afiliado; público, vem no índice
 const arquivos = new Map();          // IATA -> dados já baixados
 
 /** O índice das origens colhidas. Uma requisição, guardada para a sessão. */
@@ -55,6 +56,7 @@ function carregarIndice() {
   if (!indicePromise) {
     indicePromise = fetch(BASE + 'index.json')
       .then(r => r.ok ? r.json() : Promise.reject(new Error('index ' + r.status)))
+      .then(i => { marker = i?.marker || ''; return i; })
       .catch(() => null);           // sem índice o site segue sem esta camada
   }
   return indicePromise;
@@ -142,14 +144,15 @@ export async function tarifasVistas(ponto, month, days) {
 /**
  * Link para a busca no Aviasales, com o marker de afiliado quando existe.
  *
- * A API devolve `link` como caminho relativo ao site deles. Sem marker o link
- * continua válido e útil — só não rende comissão.
+ * A API devolve `link` como caminho relativo ao site deles, já com a data e a
+ * rota dentro — cai direto no resultado, e não numa busca em branco. Sem
+ * marker o link continua válido e útil; só não rende comissão.
+ *
+ * É síncrona porque quem a chama está montando HTML no meio de um render. O
+ * marker já foi lido junto com o índice, bem antes de qualquer destino abrir.
  */
-export async function linkDaOferta(oferta) {
-  const indice = await carregarIndice();
-  const marker = indice?.marker;
+export function linkDaOferta(oferta) {
   if (!oferta?.url) return null;
-
   const url = new URL(oferta.url, 'https://www.aviasales.com');
   if (marker) url.searchParams.set('marker', marker);
   return url.toString();
