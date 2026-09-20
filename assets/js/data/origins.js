@@ -6,7 +6,7 @@
    2) Nominatim/OpenStreetMap — qualquer cidade do mundo, sem chave de API.
    ======================================================================== */
 
-import { DESTINATIONS } from './destinations.js?v=71';
+import { DESTINATIONS } from './destinations.js?v=72';
 
 /* Cidades que costumam ser origem mas não estão na lista de destinos */
 const EXTRA_ORIGINS = [

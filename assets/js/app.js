@@ -2,18 +2,18 @@
    Pra onde posso ir? — controlador da página
    ======================================================================== */
 
-import { DESTINATIONS } from './data/destinations.js?v=71';
-import { searchLocal, searchRemote, norm } from './data/origins.js?v=71';
-import * as GEO from './data/geo.js?v=71';
-import { ligadosPorTerra } from './data/landmass.js?v=71';
-import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=71';
-import * as FX from './fx.js?v=71';
-import * as P from './providers/index.js?v=71';
-import { bookingLinks } from './links.js?v=71';
-import * as RYA from './providers/ryanair.js?v=71';
-import * as OSM from './providers/osm-stays.js?v=71';
-import * as TP from './providers/travelpayouts.js?v=71';
-import { mountAllAds } from './ads.js?v=71';
+import { DESTINATIONS } from './data/destinations.js?v=72';
+import { searchLocal, searchRemote, norm } from './data/origins.js?v=72';
+import * as GEO from './data/geo.js?v=72';
+import { ligadosPorTerra } from './data/landmass.js?v=72';
+import { MONTHS, STYLES, MODES, rankDestinations } from './engine.js?v=72';
+import * as FX from './fx.js?v=72';
+import * as P from './providers/index.js?v=72';
+import { bookingLinks } from './links.js?v=72';
+import * as RYA from './providers/ryanair.js?v=72';
+import * as OSM from './providers/osm-stays.js?v=72';
+import * as TP from './providers/travelpayouts.js?v=72';
+import { mountAllAds } from './ads.js?v=72';
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -830,14 +830,31 @@ function fitToResults() {
 }
 
 /* -------------------------------------------------------- resultados --- */
+/* A varredura chama `search` a cada lote que volta da companhia — dezenas de
+   vezes na mesma busca, muitas delas no mesmo quadro. Cada passada recalcula
+   os quase mil destinos e redesenha todos os pinos do mapa, e quando duas
+   chegam juntas a segunda só refaz o que a primeira acabou de fazer.
+
+   Uma passada pendente atende todas as chamadas que chegarem antes dela: os
+   lotes vão se juntando em vez de empilharem trabalho, e o clique num destino
+   volta a ter o navegador livre para responder. */
+let passadaPendente = null;
+let refitPendente = false;
+
 function search({ refit = true } = {}) {
   if (!state.origin) return;
   $('#mapLoading').hidden = false;
+  refitPendente = refitPendente || refit;
+  if (passadaPendente) return;
 
   // Cede o thread para o navegador pintar o "calculando" antes do trabalho
   // síncrono. Usamos setTimeout e NÃO requestAnimationFrame: rAF fica parado
   // enquanto a aba está em segundo plano, e a busca nunca rodaria.
-  setTimeout(() => {
+  passadaPendente = setTimeout(() => {
+    passadaPendente = null;
+    const refazEnquadre = refitPendente;
+    refitPendente = false;
+
     state.results = rankDestinations(state.origin, DESTINATIONS, {
       days: state.days, people: state.people, month: state.month, style: state.style,
       mode: state.mode, budgetEUR: budgetEUR(),
@@ -849,10 +866,10 @@ function search({ refit = true } = {}) {
 
     renderStats();
     drawResults();
-    if (refit) fitToResults();
+    if (refazEnquadre) fitToResults();
 
     const still = state.results.find(r => r.dest.id === state.selected);
-    if (still) renderDetails(still); else clearDetails();
+    if (still) renderDetails(still, { seMudou:true }); else clearDetails();
 
     $('#mapLoading').hidden = true;
   }, 0);
@@ -1543,6 +1560,17 @@ function renderStats() {
 }
 
 function select(id, { fly = false } = {}) {
+  // O destino anterior deixa de interessar no instante do clique. Sem cancelar
+  // aqui, a procura dele seguia viva: cada clique somava mais uma dúzia de
+  // consultas na fila da companhia, e as do destino recém-aberto entravam
+  // atrás de todas elas. Passear pelo mapa deixava o site travado e o destino
+  // aberto sem carregar nada.
+  if (id !== state.selected) {
+    conexaoAbort?.abort();
+    conexaoAbort = null;
+    clearTimeout(caminhosTimer);
+    detalheAssinatura = null;
+  }
   state.selected = id;
   const r = state.results.find(x => x.dest.id === id);
   paintSelection();
@@ -1575,6 +1603,10 @@ function select(id, { fly = false } = {}) {
  * mapa a um lugar só.
  */
 function limparSelecao() {
+  conexaoAbort?.abort();
+  conexaoAbort = null;
+  clearTimeout(caminhosTimer);
+  detalheAssinatura = null;
   state.selected = null;
   state.conexao = null;
   state.caminho = null;
@@ -1594,6 +1626,9 @@ function pintarBotaoLimpar() {
 }
 
 /* ---------------------------------------------------------- detalhes --- */
+/* Assinatura do que está escrito na barra agora — ver assinaturaDetalhe. */
+let detalheAssinatura = null;
+
 const VERDICT = {
   fit:   { tag:'cabe',      cls:'tag-fit' },
   tight: { tag:'quase lá',  cls:'tag-tight' },
@@ -1606,6 +1641,10 @@ function clearDetails({ forcar = false } = {}) {
   // ele abrir — uma corrida difícil de reproduzir e fácil de evitar.
   if (state.selected && !forcar) return;
   state.selected = null;
+  detalheAssinatura = null;
+  // Já está vazia: reescrever o corpo a cada lote da varredura remontava os
+  // espaços de anúncio dezenas de vezes sem nada mudar na tela.
+  if ($('#details')?.dataset.state === 'collapsed' && $('#detailsBody')?.querySelector('.empty')) return;
   $('#detailsTitle').textContent = 'Clique num destino do mapa para ver os voos';
   $('#detailsBody').innerHTML =
     `<p class="empty">Clique em um ponto do mapa ou em um destino da lista para ver as opções de voo e hospedagem.</p>
@@ -1707,7 +1746,47 @@ function textoSemConfirmado(r) {
           no resumo é estimativa de planejamento — confira na busca ao lado.`;
 }
 
-function renderDetails(r) {
+/**
+ * Tudo o que a barra de detalhes realmente mostra, num texto só.
+ *
+ * A varredura chama `search()` a cada lote que chega — dezenas de vezes por
+ * busca — e cada uma refazia a barra inteira por `innerHTML`. Isso não era só
+ * desperdício: reescrever o corpo joga fora o `#conexaoBox` e a procura de
+ * caminhos recomeçava do zero em cada lote, sem nunca chegar ao fim. Quem
+ * clicava num destino via "conferindo se há voo direto…" para sempre.
+ *
+ * Com a assinatura, a barra só é refeita quando muda algo que está escrito
+ * nela. Enquanto o lote que chegou não fala deste destino, o que está na tela
+ * continua onde estava — inclusive a busca de caminhos, correndo.
+ */
+function assinaturaDetalhe(r) {
+  const real = r.real
+    ? `${r.real.price}|${r.real.ida?.flight || ''}|${r.real.volta?.flight || ''}|${r.real.airport?.iata || ''}`
+    : '';
+  const visto = r.visto
+    ? `${r.visto.total}|${r.visto.n}|${r.visto.foraDaFaixa ? 1 : 0}|${r.visto.hub?.city || ''}`
+    : '';
+  // O texto do "sem preço confirmado" muda quando a varredura termina.
+  const buscando = ['loading', 'varrendo', 'escalas', 'ondas']
+    .includes($('#fareStatus')?.dataset.kind) ? 1 : 0;
+  return [
+    r.dest.id, r.verdict, r.mode, r.total, r.flight, r.stay, r.left, r.nightly,
+    r.days, r.nights, r.noitesReais, r.people, Math.round(r.km),
+    r.useGround ? 1 : 0, r.voaDireto ? 1 : 0, real, visto, buscando,
+    state.currency, state.month, state.origin?.id || '',
+  ].join('~');
+}
+
+function renderDetails(r, { seMudou = false } = {}) {
+  // Redesenhar por redesenhar custa caro: além do trabalho de DOM, reiniciava
+  // a busca de caminhos e a consulta ao OpenStreetMap a cada lote da varredura.
+  const assinatura = assinaturaDetalhe(r);
+  if (seMudou && assinatura === detalheAssinatura) return;
+  detalheAssinatura = assinatura;
+
+  // Guardada ANTES de o corpo ser reescrito, para não ser jogada fora com ele.
+  const caixaViva = caminhoEmCurso?.destId === r.dest.id ? $('#conexaoBox') : null;
+
   const v = VERDICT[r.verdict];
   const mode = MODES[r.mode] || MODES.both;
 
@@ -1847,6 +1926,10 @@ function renderDetails(r) {
       <div class="ad-slot" data-ad="strip2"></div>
       <div class="ad-slot" data-ad="strip3"></div>
     </aside>`;
+
+  // A caixa de caminhos que já está sendo preenchida sobrevive à refação: o
+  // nó volta para o corpo novo, no lugar do vazio que o modelo acabou de criar.
+  if (caixaViva) $('#conexaoBox')?.replaceWith(caixaViva);
 
   $('#detailsBody').querySelector('[data-alt]')?.addEventListener('click', e => {
     select(e.currentTarget.dataset.alt, { fly:true });
@@ -2063,6 +2146,10 @@ async function prepararBuscaDeCaminhos(r) {
   const caixa = $('#conexaoBox');
   if (!caixa) return;
 
+  // Já está correndo para esta cidade, na caixa que a refação transplantou.
+  // Recomeçar seria jogar fora o trabalho feito e voltar à primeira frase.
+  if (caminhoEmCurso?.destId === r.dest.id) return;
+
   const guardado = state.caminhosPorDestino.get(r.dest.id);
   if (guardado) {
     caixa.hidden = false;
@@ -2070,6 +2157,22 @@ async function prepararBuscaDeCaminhos(r) {
     return;
   }
 
+  // Qualquer procura de OUTRA cidade morre aqui: a caixa em que ela escrevia
+  // já saiu do documento, e as consultas dela só atrasariam as desta.
+  conexaoAbort?.abort();
+  conexaoAbort = new AbortController();
+  clearTimeout(caminhosTimer);
+  const signal = conexaoAbort.signal;
+  caminhoEmCurso = { destId: r.dest.id };
+  try {
+    await procurarCaminhos(r, caixa, signal);
+  } finally {
+    if (caminhoEmCurso?.destId === r.dest.id) caminhoEmCurso = null;
+  }
+}
+
+/** O trabalho em si; quem cuida do cancelamento é prepararBuscaDeCaminhos. */
+async function procurarCaminhos(r, caixa, signal) {
   // Primeiro o barato: existe voo direto para ESTE destino?
   //
   // A varredura geral traz só os 20 mais baratos de cada saída, e a varredura
@@ -2093,13 +2196,12 @@ async function prepararBuscaDeCaminhos(r) {
   // duas precisam estar na tela, em ordem e com hora. É o caminho principal
   // para esse destino, então vem antes de procurar alternativas.
   if (r.visto?.trecho) {
-    conexaoAbort?.abort();
-    conexaoAbort = new AbortController();
-    if (await montarTrajetoriaVista(r, conexaoAbort.signal)) return;
+    if (await montarTrajetoriaVista(r, signal)) return;
+    if (signal.aborted) return;
   }
 
-  const achou = await tentarVooDireto(r);
-  if (achou || state.selected !== r.dest.id) return;   // já virou preço confirmado
+  const achou = await tentarVooDireto(r, signal);
+  if (achou || signal.aborted || state.selected !== r.dest.id) return;   // já virou preço confirmado
 
   caixa.hidden = false;
   caixa.classList.remove('conexao-direta', 'duas-opcoes');
@@ -2114,21 +2216,38 @@ async function prepararBuscaDeCaminhos(r) {
   // atraso curto abaixo — passar o mouse por vários destinos em sequência não
   // dispara busca nenhuma, só o que ficar aberto dispara.
   caixa.innerHTML = '<span class="conexao-load">procurando caminhos até aqui…</span>';
+
+  // O atraso curto é o que evita gastar consulta com quem só passou o olho.
+  // Ele é ESPERADO, e não entregue a um temporizador solto: assim a procura
+  // inteira cabe num `await` só e quem chama sabe quando ela acabou.
   clearTimeout(caminhosTimer);
-  caminhosTimer = setTimeout(() => {
-    if (state.selected === r.dest.id) buscarConexao(r);
-  }, 700);
+  await new Promise(pronto => {
+    caminhosTimer = setTimeout(pronto, 700);
+    signal.addEventListener('abort', () => { clearTimeout(caminhosTimer); pronto(); }, { once:true });
+  });
+  if (signal.aborted || state.selected !== r.dest.id) return;
+
+  await buscarConexao(r, signal);
 }
 let caminhosTimer;
+
+/* Qual destino tem uma procura de caminhos correndo AGORA.
+   A barra pode ser refeita com a mesma cidade aberta — a varredura achou um
+   preço melhor e o cabeçalho mudou. Sem isto, cada refação recomeçava a
+   procura do zero: quinze reinícios numa busca só, e a caixa voltando a
+   "conferindo se há voo direto…" sem nunca chegar ao fim. Agora a caixa em uso
+   é transplantada para a barra nova (ver renderDetails) e a procura que já
+   está correndo continua escrevendo nela. */
+let caminhoEmCurso = null;
 
 /**
  * Confere se alguma das saídas próximas tem voo direto para este destino.
  * Duas consultas por saída, no máximo duas saídas: é a busca mais barata que
  * existe e resolve a maioria dos casos.
  */
-async function tentarVooDireto(r) {
+async function tentarVooDireto(r, signal) {
   if (r.real || r.useGround || !state.airports.length) return false;
-  if (RYA.estaBloqueado()) return false;
+  if (RYA.estaBloqueado() || signal?.aborted) return false;
 
   // O par de aeroportos que a varredura CONFIRMOU voar até aqui neste mês.
   //
@@ -2149,12 +2268,19 @@ async function tentarVooDireto(r) {
     ? [confirmado.saida, ...saidasAtivas().filter(s => s.iata !== confirmado.saida.iata)]
     : saidasAtivas();
 
+  // Cada volta deste laço são até quatro consultas à companhia, em fila. Sem o
+  // sinal elas continuavam saindo depois de a pessoa já ter aberto outro
+  // destino — e o destino novo esperava atrás delas.
   for (const saida of ordem) {
+    if (signal?.aborted) return false;
     if (saida.iata === destApt.iata) continue;
-    const rotas = await RYA.routesFrom(saida.iata);      // cache de 30 dias
+    const rotas = await RYA.routesFrom(saida.iata, signal);   // cache de 30 dias
+    if (signal?.aborted) return false;
     if (!rotas.some(x => x.iata === destApt.iata)) continue;
 
-    const preco = await RYA.directRoundTrip(saida.iata, destApt.iata, state.month, state.days);
+    const preco = await RYA.directRoundTrip(
+      saida.iata, destApt.iata, state.month, state.days, signal);
+    if (signal?.aborted) return false;
     if (preco) {
       registrarTarifaEncontrada(r.dest.id, { ...preco, saida }, destApt);
       return true;
@@ -2170,11 +2296,13 @@ let conexaoAbort;
  * Quando não há voo direto, procura um caminho pela própria malha da Ryanair
  * (Olbia → Bergamo → Madri) e mostra o trajeto. Cada trecho é comprado
  * separadamente: não é um bilhete só, e a tela diz isso.
+ *
+ * O sinal vem de quem chamou. Criar um aqui cancelava o próprio pedido que
+ * acabou de nos trazer até este ponto, e deixava `conexaoAbort` apontando para
+ * um controlador que `select` não conhecia mais — o clique no destino seguinte
+ * mandava parar uma busca e outra continuava correndo em silêncio.
  */
-async function buscarConexao(r) {
-  conexaoAbort?.abort();
-  conexaoAbort = new AbortController();
-  const signal = conexaoAbort.signal;
+async function buscarConexao(r, signal) {
   const alvo = r.dest.id;
 
   /* Sair daqui deixando a caixa como está é o que fazia "procurando caminhos
@@ -3402,11 +3530,20 @@ function diasDoTrajeto(c) {
   return Math.round((new Date(fim) - new Date(ini)) / 864e5);
 }
 
-/** "parte de CAG, a 183 km de você" — a saída escolhida para esta tarifa. */
+/**
+ * "parte de CAG, a 183 km de você" — a saída escolhida para esta tarifa.
+ *
+ * A distância só é dita quando a tarifa NÃO parte do aeroporto mais perto de
+ * casa: para o de sempre, repetir os quilômetros a cada linha é ruído.
+ *
+ * Quem serve de referência é o mais perto entre os LIGADOS. Desligando o que
+ * fica ao lado, toda tarifa passa a sair de longe — e aí a distância importa
+ * em todas elas.
+ */
 function saidaTexto(fare) {
   const s = fare?.saida;
   if (!s) return '';
-  const perto = achados[0];
+  const perto = saidasAtivas()[0];
   const extra = (perto && s.iata !== perto.iata) || s.km > 40
     ? `, a ${s.km} km de você` : '';
   return `parte de <b>${esc(s.iata)}</b>${extra}`;
