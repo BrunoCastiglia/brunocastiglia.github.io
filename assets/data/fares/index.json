@@ -1,5 +1,5 @@
 {
- "atualizado": "2026-09-26T09:25:39.187Z",
+ "atualizado": "2026-09-27T10:04:16.432Z",
  "marker": "779053",
  "meses": [
   "2026-09",
@@ -15,49 +15,49 @@
    "city": "São Paulo",
    "lat": -23.43,
    "lon": -46.47,
-   "ofertas": 322
+   "ofertas": 332
   },
   {
    "iata": "GIG",
    "city": "Rio de Janeiro",
    "lat": -22.81,
    "lon": -43.25,
-   "ofertas": 158
+   "ofertas": 159
   },
   {
    "iata": "BSB",
    "city": "Brasília",
    "lat": -15.87,
    "lon": -47.92,
-   "ofertas": 51
+   "ofertas": 46
   },
   {
    "iata": "CNF",
    "city": "Belo Horizonte",
    "lat": -19.62,
    "lon": -43.97,
-   "ofertas": 30
+   "ofertas": 28
   },
   {
    "iata": "CWB",
    "city": "Curitiba",
    "lat": -25.53,
    "lon": -49.17,
-   "ofertas": 39
+   "ofertas": 37
   },
   {
    "iata": "POA",
    "city": "Porto Alegre",
    "lat": -29.99,
    "lon": -51.17,
-   "ofertas": 37
+   "ofertas": 35
   },
   {
    "iata": "SSA",
    "city": "Salvador",
    "lat": -12.91,
    "lon": -38.33,
-   "ofertas": 31
+   "ofertas": 27
   },
   {
    "iata": "REC",
@@ -71,28 +71,28 @@
    "city": "Fortaleza",
    "lat": -3.78,
    "lon": -38.53,
-   "ofertas": 20
+   "ofertas": 22
   },
   {
    "iata": "BEL",
    "city": "Belém",
    "lat": -1.38,
    "lon": -48.48,
-   "ofertas": 13
+   "ofertas": 11
   },
   {
    "iata": "MAO",
    "city": "Manaus",
    "lat": -3.04,
    "lon": -60.05,
-   "ofertas": 24
+   "ofertas": 23
   },
   {
    "iata": "VCP",
    "city": "Campinas",
    "lat": -23.01,
    "lon": -47.13,
-   "ofertas": 283
+   "ofertas": 288
   },
   {
    "iata": "NAT",
@@ -113,119 +113,119 @@
    "city": "Vitória",
    "lat": -20.26,
    "lon": -40.29,
-   "ofertas": 25
+   "ofertas": 26
   },
   {
    "iata": "FLN",
    "city": "Florianópolis",
    "lat": -27.67,
    "lon": -48.55,
-   "ofertas": 85
+   "ofertas": 86
   },
   {
    "iata": "EZE",
    "city": "Buenos Aires",
    "lat": -34.82,
    "lon": -58.54,
-   "ofertas": 268
+   "ofertas": 257
   },
   {
    "iata": "SCL",
    "city": "Santiago",
    "lat": -33.39,
    "lon": -70.79,
-   "ofertas": 121
+   "ofertas": 125
   },
   {
    "iata": "LIM",
    "city": "Lima",
    "lat": -12.02,
    "lon": -77.11,
-   "ofertas": 101
+   "ofertas": 102
   },
   {
    "iata": "BOG",
    "city": "Bogotá",
    "lat": 4.7,
    "lon": -74.15,
-   "ofertas": 136
+   "ofertas": 129
   },
   {
    "iata": "MVD",
    "city": "Montevidéu",
    "lat": -34.84,
    "lon": -56.03,
-   "ofertas": 65
+   "ofertas": 66
   },
   {
    "iata": "MEX",
    "city": "Cidade do México",
    "lat": 19.44,
    "lon": -99.07,
-   "ofertas": 163
+   "ofertas": 162
   },
   {
    "iata": "LIS",
    "city": "Lisboa",
    "lat": 38.77,
    "lon": -9.13,
-   "ofertas": 459
+   "ofertas": 450
   },
   {
    "iata": "OPO",
    "city": "Porto",
    "lat": 41.24,
    "lon": -8.68,
-   "ofertas": 270
+   "ofertas": 258
   },
   {
    "iata": "MAD",
    "city": "Madri",
    "lat": 40.49,
    "lon": -3.57,
-   "ofertas": 606
+   "ofertas": 588
   },
   {
    "iata": "BCN",
    "city": "Barcelona",
    "lat": 41.3,
    "lon": 2.08,
-   "ofertas": 556
+   "ofertas": 560
   },
   {
    "iata": "CDG",
    "city": "Paris",
    "lat": 49.01,
    "lon": 2.55,
-   "ofertas": 672
+   "ofertas": 667
   },
   {
    "iata": "LON",
    "city": "Londres",
    "lat": 51.47,
    "lon": -0.45,
-   "ofertas": 627
+   "ofertas": 613
   },
   {
    "iata": "FCO",
    "city": "Roma",
    "lat": 41.8,
    "lon": 12.25,
-   "ofertas": 541
+   "ofertas": 545
   },
   {
    "iata": "MIL",
    "city": "Milão",
    "lat": 45.63,
    "lon": 8.72,
-   "ofertas": 607
+   "ofertas": 614
   },
   {
    "iata": "FRA",
    "city": "Frankfurt",
    "lat": 50.04,
    "lon": 8.56,
-   "ofertas": 554
+   "ofertas": 544
   },
   {
    "iata": "AMS",
@@ -239,28 +239,28 @@
    "city": "Bruxelas",
    "lat": 50.9,
    "lon": 4.48,
-   "ofertas": 407
+   "ofertas": 401
   },
   {
    "iata": "ZRH",
    "city": "Zurique",
    "lat": 47.46,
    "lon": 8.55,
-   "ofertas": 327
+   "ofertas": 331
   },
   {
    "iata": "VIE",
    "city": "Viena",
    "lat": 48.11,
    "lon": 16.57,
-   "ofertas": 443
+   "ofertas": 446
   },
   {
    "iata": "DUB",
    "city": "Dublin",
    "lat": 53.43,
    "lon": -6.25,
-   "ofertas": 287
+   "ofertas": 279
   },
   {
    "iata": "NYC",
@@ -274,14 +274,14 @@
    "city": "Miami",
    "lat": 25.79,
    "lon": -80.29,
-   "ofertas": 256
+   "ofertas": 258
   },
   {
    "iata": "YYZ",
    "city": "Toronto",
    "lat": 43.68,
    "lon": -79.63,
-   "ofertas": 341
+   "ofertas": 328
   },
   {
    "iata": "LAD",
@@ -295,7 +295,7 @@
    "city": "Maputo",
    "lat": -25.92,
    "lon": 32.57,
-   "ofertas": 7
+   "ofertas": 8
   }
  ]
 }
